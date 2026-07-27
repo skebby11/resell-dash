@@ -27,13 +27,20 @@ export function Topbar() {
       <div className="flex items-center gap-2.5 sm:gap-3">
         <Button
           render={<Link href="/inserimento" />}
+          nativeButton={false}
           size="sm"
           className="hidden sm:inline-flex"
         >
           <PlusCircle className="size-4" />
           Nuovo acquisto
         </Button>
-        <Button render={<Link href="/inserimento" />} size="icon" className="sm:hidden">
+        <Button
+          render={<Link href="/inserimento" />}
+          nativeButton={false}
+          size="icon"
+          className="sm:hidden"
+          aria-label="Aggiungi nuovo articolo"
+        >
           <PlusCircle className="size-4" />
         </Button>
         <Avatar className="size-9 border border-border">

@@ -1,5 +1,16 @@
+import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `Variabile d'ambiente mancante: ${name}. Configurala in .env.local prima di creare un client Supabase reale (vedi .env.example).`
+    );
+  }
+  return value;
+}
 
 /**
  * Client Supabase per Server Components / Route Handlers.
@@ -8,8 +19,8 @@ import { cookies } from "next/headers";
  */
 export async function createClient() {
   const cookieStore = await cookies();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const anonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
   return createServerClient(url, anonKey, {
     cookies: {
@@ -35,8 +46,8 @@ export async function createClient() {
  * fidati (mai esporre al browser). Stub in attesa di configurazione reale.
  */
 export function createServiceRoleClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  const url = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 
   return createServerClient(url, serviceRoleKey, {
     cookies: {

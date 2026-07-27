@@ -14,6 +14,7 @@ const dateFormatter = new Intl.DateTimeFormat("it-IT", {
   day: "2-digit",
   month: "short",
   year: "numeric",
+  timeZone: "UTC",
 });
 
 export function formatCurrency(value: number): string {
@@ -25,6 +26,8 @@ export function formatCurrencyCompact(value: number): string {
 }
 
 export function formatDate(iso: string): string {
+  // Interpreta le date "date-only" (YYYY-MM-DD) come mezzanotte UTC e le
+  // formatta in UTC, cosi il giorno mostrato non dipende dal fuso locale.
   return dateFormatter.format(new Date(iso));
 }
 

@@ -29,6 +29,8 @@ export default function ArticoliPage() {
   const [filtro, setFiltro] = useState<StatoArticolo | "tutti">("tutti");
   const [ricerca, setRicerca] = useState("");
 
+  // TODO: con i dati live (Supabase) spostare filtro/sort/paginazione lato DB
+  // (query con order/ilike/range) invece di caricare tutto e filtrare in client.
   const articoli = useMemo(() => {
     return [...articoliMock]
       .sort((a, b) => b.dataAcquisto.localeCompare(a.dataAcquisto))
@@ -51,7 +53,11 @@ export default function ArticoliPage() {
 
         <div className="relative w-full sm:w-64">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <label htmlFor="ricerca-articoli" className="sr-only">
+            Cerca prodotto
+          </label>
           <Input
+            id="ricerca-articoli"
             placeholder="Cerca prodotto…"
             className="pl-8"
             value={ricerca}
@@ -92,7 +98,7 @@ export default function ArticoliPage() {
                     {a.dataVendita ? formatDate(a.dataVendita) : "—"}
                   </TableCell>
                   <TableCell className="text-right font-mono-num">
-                    {a.prezzoVendita ? formatCurrency(a.prezzoVendita) : "—"}
+                    {a.prezzoVendita != null ? formatCurrency(a.prezzoVendita) : "—"}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {a.piattaformaVendita ?? "—"}

@@ -43,3 +43,9 @@ start.bat
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# PromptOps context snapshot
+.promptops/
+
+# PromptOps session assets
+.promptops-assets/

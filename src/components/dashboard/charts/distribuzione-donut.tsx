@@ -20,7 +20,7 @@ function DonutTooltip({
 }) {
   if (!active || !payload?.length) return null;
   const entry = payload[0];
-  const pct = ((entry.value / entry.payload.total) * 100).toFixed(0);
+  const pct = entry.payload.total > 0 ? ((entry.value / entry.payload.total) * 100).toFixed(0) : "0";
   return (
     <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
       <p className="font-medium text-popover-foreground">{entry.name}</p>
@@ -35,6 +35,14 @@ function DonutTooltip({
 export function DistribuzioneDonut({ data }: { data: DistribuzioneVoce[] }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const dataWithTotal = data.map((d) => ({ ...d, total }));
+
+  if (total === 0) {
+    return (
+      <div className="flex h-[168px] w-full items-center justify-center text-sm text-muted-foreground">
+        Nessun dato
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-5">

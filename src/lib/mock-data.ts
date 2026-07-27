@@ -238,7 +238,7 @@ function generaArticoli(): Articolo[] {
     const dataAcquisto = isoDate(periodo.anno, periodo.mese, giornoAcquisto);
 
     const variazioneCosto = 0.85 + rand() * 0.3;
-    const costoAcquisto = round2(prodotto.prezzoMedioAcquisto * variazioneCosto);
+    const costoAcquisto = round2((prodotto.prezzoMedioAcquisto ?? 0) * variazioneCosto);
     const fonteAcquisto = pick(FONTI);
 
     // distribuzione stato: la maggior parte è venduta/consegnata (per popolare la dashboard),
@@ -250,6 +250,8 @@ function generaArticoli(): Articolo[] {
     else if (statoRoll < 0.92) stato = "in vendita";
     else stato = "acquistato";
 
+    const venduto = stato === "venduto" || stato === "consegnato";
+
     const articolo: Articolo = {
       id: `a-${String(i + 1).padStart(3, "0")}`,
       prodottoId: prodotto.id,
@@ -259,17 +261,29 @@ function generaArticoli(): Articolo[] {
       costoAcquisto,
       fonteAcquisto,
       stato,
+      // Un articolo non ancora venduto/consegnato non ha dati di vendita né profitto.
+      dataVendita: null,
+      prezzoVendita: null,
+      piattaformaVendita: null,
+      fee: null,
+      costoSpedizione: null,
+      destinazione: null,
+      spedizioniere: null,
+      prodottoSponsorizzato: false,
+      venditaPostOfferta: false,
+      profitto: null,
     };
 
-    if (stato === "venduto" || stato === "consegnato") {
+    if (venduto) {
       const giorniAttesa = randInt(3, 45);
       const dataVendita = addDays(periodo.anno, periodo.mese, giornoAcquisto, giorniAttesa);
       // se la vendita supera oggi, ricadi nel mese di acquisto stesso (clamp semplice)
       const dataVenditaFinale =
         dataVendita > "2026-07-24" ? isoDate(periodo.anno, periodo.mese, periodo.giorni) : dataVendita;
 
+      const prezzoMedioVendita = prodotto.prezzoMedioVendita ?? prodotto.prezzoMedioAcquisto ?? 0;
       const variazioneVendita = 0.88 + rand() * 0.35;
-      const prezzoVendita = round2(prodotto.prezzoMedioVendita * variazioneVendita);
+      const prezzoVendita = round2(prezzoMedioVendita * variazioneVendita);
       const piattaformaVendita = pick(PIATTAFORME);
       const fee = round2(prezzoVendita * (piattaformaVendita === "eBay" ? 0.1 : piattaformaVendita === "Vinted" ? 0.05 : 0.03));
       const costoSpedizione = round2(4 + rand() * 8);
@@ -297,17 +311,33 @@ export const articoliMock: Articolo[] = generaArticoli();
 
 // --- Aggregazioni derivate per la dashboard ---
 
+// "Venduto" ai fini delle metriche = stato venduto/consegnato.
 const venduti = articoliMock.filter((a) => a.stato === "venduto" || a.stato === "consegnato");
 const nonVenduti = articoliMock.filter((a) => a.stato === "acquistato" || a.stato === "in vendita");
+// Sottoinsieme dei venduti con prezzo di vendita valorizzato: per costruzione un
+// articolo venduto/consegnato ha sempre prezzoVendita, ma le medie/i totali vanno
+// calcolati solo su questo sottoinsieme per restare null-safe anche con dati reali
+// (DB) dove l'invariante potrebbe non essere ancora garantita a runtime.
+const venditeConPrezzo = venduti.filter(
+  (a): a is typeof a & { prezzoVendita: number } => a.prezzoVendita != null
+);
 
 export const kpi = {
   numeroVendite: venduti.length,
   prezzoMedioVendita: round2(
-    venduti.reduce((s, a) => s + (a.prezzoVendita ?? 0), 0) / (venduti.length || 1)
+    venditeConPrezzo.reduce((s, a) => s + a.prezzoVendita, 0) / (venditeConPrezzo.length || 1)
   ),
-  venditeTotali: round2(venduti.reduce((s, a) => s + (a.prezzoVendita ?? 0), 0)),
+  venditeTotali: round2(venditeConPrezzo.reduce((s, a) => s + a.prezzoVendita, 0)),
   profittoTotale: round2(venduti.reduce((s, a) => s + (a.profitto ?? 0), 0)),
+  // Valore di stock a costo: somma dei costi d'acquisto degli articoli non ancora
+  // venduti/consegnati (capitale "congelato" in merce, non liquidità disponibile).
   fondiImmobilizzati: round2(nonVenduti.reduce((s, a) => s + a.costoAcquisto, 0)),
+  /**
+   * "Capitale" = fondiImmobilizzati + profittoTotale.
+   * Non è un saldo di cassa reale: somma il valore a costo dello stock invenduto
+   * con l'utile netto già realizzato sulle vendite, come proxy del capitale
+   * complessivamente generato/impiegato dall'attività (stock + utili accumulati).
+   */
   get capitale() {
     return round2(this.fondiImmobilizzati + this.profittoTotale);
   },
@@ -327,7 +357,11 @@ export function venditePerMese(): VenditaMensile[] {
   return Array.from(gruppi.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([mese, items]) => {
-      const totale = round2(items.reduce((s, a) => s + (a.prezzoVendita ?? 0), 0));
+      // Media/totale vendite solo sugli articoli con prezzoVendita valorizzato.
+      const itemsConPrezzo = items.filter(
+        (a): a is typeof a & { prezzoVendita: number } => a.prezzoVendita != null
+      );
+      const totale = round2(itemsConPrezzo.reduce((s, a) => s + a.prezzoVendita, 0));
       const profitto = round2(items.reduce((s, a) => s + (a.profitto ?? 0), 0));
       const [anno, m] = mese.split("-").map(Number);
       const label = MESE_LABEL.format(new Date(Date.UTC(anno, m - 1, 1)));
@@ -336,13 +370,16 @@ export function venditePerMese(): VenditaMensile[] {
         meseLabel: label.charAt(0).toUpperCase() + label.slice(1),
         numeroVendite: items.length,
         totaleVendite: totale,
-        prezzoMedio: round2(totale / items.length),
+        prezzoMedio: round2(totale / (itemsConPrezzo.length || 1)),
         profitto,
       };
     });
 }
 
-function distribuzione<T extends string>(items: Articolo[], key: (a: Articolo) => T | undefined): DistribuzioneVoce[] {
+function distribuzione<T extends string>(
+  items: Articolo[],
+  key: (a: Articolo) => T | null | undefined
+): DistribuzioneVoce[] {
   const conteggio = new Map<string, number>();
   for (const a of items) {
     const v = key(a);

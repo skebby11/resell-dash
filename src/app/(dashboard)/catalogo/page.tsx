@@ -12,8 +12,10 @@ export default function CatalogoPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {prodottiMock.map((p) => {
-          const margine = p.prezzoMedioVendita - p.prezzoMedioAcquisto;
-          const marginePct = (margine / p.prezzoMedioAcquisto) * 100;
+          const haDatiPrezzo = p.prezzoMedioVendita != null && p.prezzoMedioAcquisto != null;
+          const margine = haDatiPrezzo ? p.prezzoMedioVendita! - p.prezzoMedioAcquisto! : null;
+          const marginePct =
+            margine != null && p.prezzoMedioAcquisto ? (margine / p.prezzoMedioAcquisto) * 100 : null;
           return (
             <div
               key={p.id}
@@ -46,13 +48,13 @@ export default function CatalogoPage() {
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Acquisto medio</p>
                   <p className="font-mono-num font-medium text-foreground">
-                    {formatCurrency(p.prezzoMedioAcquisto)}
+                    {p.prezzoMedioAcquisto != null ? formatCurrency(p.prezzoMedioAcquisto) : "—"}
                   </p>
                 </div>
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Vendita media</p>
                   <p className="font-mono-num font-medium text-foreground">
-                    {formatCurrency(p.prezzoMedioVendita)}
+                    {p.prezzoMedioVendita != null ? formatCurrency(p.prezzoMedioVendita) : "—"}
                   </p>
                 </div>
               </div>
@@ -60,7 +62,9 @@ export default function CatalogoPage() {
               <div className="flex items-center justify-between rounded-md bg-accent px-3 py-2">
                 <span className="text-xs font-medium text-accent-foreground">Margine stimato</span>
                 <span className="font-mono-num text-sm font-semibold text-accent-foreground">
-                  {formatCurrency(margine)} ({marginePct.toFixed(0)}%)
+                  {margine != null && marginePct != null
+                    ? `${formatCurrency(margine)} (${marginePct.toFixed(0)}%)`
+                    : "—"}
                 </span>
               </div>
             </div>

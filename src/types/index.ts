@@ -15,8 +15,10 @@ export interface Prodotto {
   nome: string;
   categoria: Categoria;
   piattaformaGioco?: string; // es. PS5, Xbox Series X, Nintendo Switch
-  prezzoMedioAcquisto: number;
-  prezzoMedioVendita: number;
+  /** Media storica dei costi di acquisto; null finché non c'è ancora uno storico. */
+  prezzoMedioAcquisto: number | null;
+  /** Media storica dei prezzi di vendita; null finché non c'è ancora uno storico. */
+  prezzoMedioVendita: number | null;
   note?: string;
   fotoUrl?: string;
 }
@@ -24,7 +26,7 @@ export interface Prodotto {
 /** Singolo esemplare fisico acquistato/rivenduto, collegato a un Prodotto. */
 export interface Articolo {
   id: string;
-  prodottoId: string;
+  prodottoId: string; // NOT NULL, ON DELETE RESTRICT lato DB: un articolo riferisce sempre un prodotto valido
   prodottoNome: string;
   categoria: Categoria;
 
@@ -33,18 +35,20 @@ export interface Articolo {
   fonteAcquisto: FonteAcquisto;
   stato: StatoArticolo;
 
-  dataVendita?: string; // ISO date
-  prezzoVendita?: number;
-  piattaformaVendita?: PiattaformaVendita;
-  fee?: number;
-  costoSpedizione?: number;
-  prodottoSponsorizzato?: boolean;
-  venditaPostOfferta?: boolean;
-  destinazione?: Destinazione;
-  spedizioniere?: string;
+  // Dati di vendita: nullable, valorizzati solo quando stato è 'venduto'/'consegnato'.
+  dataVendita: string | null; // ISO date
+  prezzoVendita: number | null;
+  piattaformaVendita: PiattaformaVendita | null;
+  fee: number | null;
+  costoSpedizione: number | null;
+  destinazione: Destinazione | null;
+  spedizioniere: string | null;
 
-  /** prezzoVendita - costoAcquisto - costoSpedizione - fee (solo se venduto) */
-  profitto?: number;
+  prodottoSponsorizzato: boolean;
+  venditaPostOfferta: boolean;
+
+  /** prezzoVendita - costoAcquisto - costoSpedizione - fee. NULL finché non venduto/consegnato. */
+  profitto: number | null;
 }
 
 export interface VenditaMensile {
