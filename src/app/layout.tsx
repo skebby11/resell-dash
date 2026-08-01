@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
-import { Fraunces, Manrope, JetBrains_Mono } from "next/font/google";
+import { Inter, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
-const fraunces = Fraunces({
-  variable: "--font-display",
-  subsets: ["latin"],
-  axes: ["opsz", "SOFT", "WONK"],
-});
-
-const manrope = Manrope({
+// Inter: neutra e molto leggibile per testo e UI, sostituisce Manrope che il
+// cliente trovava troppo sottile.
+const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-mono",
+// Barlow Condensed: la condensata pesante/corsiva più vicina, fra i Google
+// Fonts, al lettering del brand "DIECI MENO" (bastone, condensato, corsivo,
+// maiuscolo). Sostituisce Fraunces, un serif "wonky" giudicato troppo
+// leggero per il nuovo posizionamento. Si carica solo nei pesi usati.
+const barlowCondensed = Barlow_Condensed({
+  variable: "--font-display",
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: ["600", "700", "800"],
+  style: ["normal", "italic"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -33,7 +36,7 @@ export default function RootLayout({
   return (
     <html
       lang="it"
-      className={`${fraunces.variable} ${manrope.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${barlowCondensed.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
         {children}

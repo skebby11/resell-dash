@@ -51,88 +51,95 @@
 }
 
 :root {
-  /* warm paper / ink base */
-  --background: oklch(0.975 0.008 75);
-  --foreground: oklch(0.2 0.015 55);
-  --card: oklch(0.995 0.004 75);
-  --card-foreground: oklch(0.2 0.015 55);
-  --popover: oklch(0.995 0.004 75);
-  --popover-foreground: oklch(0.2 0.015 55);
+  /* i numeri (font-mono-num) restano su --font-sans: niente font monospace
+     dedicato, quindi qui solo uno stack di fallback per il tema tailwind */
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* terracotta / rust accent */
-  --primary: oklch(0.55 0.16 42);
-  --primary-foreground: oklch(0.99 0.01 75);
+  /* carta chiara / inchiostro blu notte — base neutra, non gialla: il giallo
+     resta un accento, mai un fondo su cui leggere testo lungo */
+  --background: oklch(0.982 0.005 95.1);
+  --foreground: oklch(0.222 0.035 242);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.222 0.035 242);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.222 0.035 242);
 
-  --secondary: oklch(0.94 0.015 70);
-  --secondary-foreground: oklch(0.25 0.02 55);
+  /* giallo brand: solo superfici/accenti, mai testo su fondo chiaro (AA) */
+  --primary: oklch(0.852 0.173 89.5);
+  --primary-foreground: oklch(0.222 0.035 242);
 
-  --muted: oklch(0.94 0.012 70);
-  --muted-foreground: oklch(0.48 0.02 55);
+  --secondary: oklch(0.946 0.01 93.6);
+  --secondary-foreground: oklch(0.222 0.035 242);
 
-  --accent: oklch(0.91 0.03 165);
-  --accent-foreground: oklch(0.3 0.06 165);
+  --muted: oklch(0.946 0.01 93.6);
+  --muted-foreground: oklch(0.462 0.026 250.5);
 
-  --destructive: oklch(0.55 0.2 25);
-  --negative: oklch(0.55 0.2 25);
-  --positive: oklch(0.5 0.1 165);
+  --accent: oklch(0.944 0.018 245.4);
+  --accent-foreground: oklch(0.388 0.104 253.1);
 
-  --border: oklch(0.88 0.014 70);
-  --input: oklch(0.88 0.014 70);
-  --ring: oklch(0.55 0.16 42);
+  --destructive: oklch(0.495 0.154 24.8);
+  --negative: oklch(0.495 0.154 24.8);
+  --positive: oklch(0.467 0.108 154.1);
 
-  /* chart palette: rust, deep teal, gold, slate plum, warm charcoal */
-  --chart-1: oklch(0.55 0.16 42);
-  --chart-2: oklch(0.5 0.09 185);
-  --chart-3: oklch(0.72 0.13 80);
-  --chart-4: oklch(0.48 0.09 290);
-  --chart-5: oklch(0.35 0.02 55);
+  --border: oklch(0.222 0.035 242 / 20%);
+  --input: oklch(0.222 0.035 242 / 28%);
+  --ring: oklch(0.521 0.133 250);
+
+  /* chart palette: giallo brand, blu notte, blu mascotte, ambra, ardesia */
+  --chart-1: oklch(0.852 0.173 89.5);
+  --chart-2: oklch(0.222 0.035 242);
+  --chart-3: oklch(0.521 0.133 250);
+  --chart-4: oklch(0.68 0.139 75.5);
+  --chart-5: oklch(0.539 0.024 248.3);
 
   --radius: 0.55rem;
 
-  --sidebar: oklch(0.965 0.014 68);
-  --sidebar-foreground: oklch(0.25 0.02 55);
-  --sidebar-primary: oklch(0.55 0.16 42);
-  --sidebar-primary-foreground: oklch(0.99 0.01 75);
-  --sidebar-accent: oklch(0.91 0.03 165);
-  --sidebar-accent-foreground: oklch(0.3 0.06 165);
-  --sidebar-border: oklch(0.88 0.014 70);
-  --sidebar-ring: oklch(0.55 0.16 42);
+  /* sidebar sempre blu notte, in light e dark: è la "cornice" scura del
+     brand, con il giallo riservato allo stato attivo */
+  --sidebar: oklch(0.222 0.035 242);
+  --sidebar-foreground: oklch(0.955 0.008 91.5);
+  --sidebar-primary: oklch(0.852 0.173 89.5);
+  --sidebar-primary-foreground: oklch(0.222 0.035 242);
+  --sidebar-accent: oklch(0.271 0.041 249.6);
+  --sidebar-accent-foreground: oklch(0.955 0.008 91.5);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.852 0.173 89.5);
 }
 
 .dark {
-  --background: oklch(0.19 0.014 55);
-  --foreground: oklch(0.94 0.01 70);
-  --card: oklch(0.23 0.015 55);
-  --card-foreground: oklch(0.94 0.01 70);
-  --popover: oklch(0.23 0.015 55);
-  --popover-foreground: oklch(0.94 0.01 70);
-  --primary: oklch(0.68 0.15 42);
-  --primary-foreground: oklch(0.18 0.02 50);
-  --secondary: oklch(0.28 0.016 55);
-  --secondary-foreground: oklch(0.94 0.01 70);
-  --muted: oklch(0.28 0.016 55);
-  --muted-foreground: oklch(0.68 0.02 65);
-  --accent: oklch(0.32 0.04 165);
-  --accent-foreground: oklch(0.9 0.03 165);
-  --destructive: oklch(0.62 0.2 25);
-  --negative: oklch(0.62 0.2 25);
-  --positive: oklch(0.68 0.1 165);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.68 0.15 42);
-  --chart-1: oklch(0.68 0.15 42);
-  --chart-2: oklch(0.62 0.1 185);
-  --chart-3: oklch(0.78 0.13 80);
-  --chart-4: oklch(0.62 0.1 290);
-  --chart-5: oklch(0.75 0.015 55);
-  --sidebar: oklch(0.21 0.015 55);
-  --sidebar-foreground: oklch(0.94 0.01 70);
-  --sidebar-primary: oklch(0.68 0.15 42);
-  --sidebar-primary-foreground: oklch(0.18 0.02 50);
-  --sidebar-accent: oklch(0.32 0.04 165);
-  --sidebar-accent-foreground: oklch(0.9 0.03 165);
+  --background: oklch(0.213 0.029 249.4);
+  --foreground: oklch(0.955 0.008 91.5);
+  --card: oklch(0.255 0.031 249.1);
+  --card-foreground: oklch(0.955 0.008 91.5);
+  --popover: oklch(0.255 0.031 249.1);
+  --popover-foreground: oklch(0.955 0.008 91.5);
+  --primary: oklch(0.852 0.173 89.5);
+  --primary-foreground: oklch(0.222 0.035 242);
+  --secondary: oklch(0.287 0.032 249);
+  --secondary-foreground: oklch(0.955 0.008 91.5);
+  --muted: oklch(0.287 0.032 249);
+  --muted-foreground: oklch(0.719 0.022 248.1);
+  --accent: oklch(0.338 0.059 246.1);
+  --accent-foreground: oklch(0.745 0.105 243.5);
+  --destructive: oklch(0.727 0.137 14.3);
+  --negative: oklch(0.727 0.137 14.3);
+  --positive: oklch(0.804 0.165 157);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 18%);
+  --ring: oklch(0.707 0.11 243.4);
+  --chart-1: oklch(0.852 0.173 89.5);
+  --chart-2: oklch(0.939 0.011 95.2);
+  --chart-3: oklch(0.707 0.11 243.4);
+  --chart-4: oklch(0.767 0.139 78.2);
+  --chart-5: oklch(0.699 0.023 246);
+  --sidebar: oklch(0.194 0.027 244.9);
+  --sidebar-foreground: oklch(0.955 0.008 91.5);
+  --sidebar-primary: oklch(0.852 0.173 89.5);
+  --sidebar-primary-foreground: oklch(0.222 0.035 242);
+  --sidebar-accent: oklch(0.295 0.036 249.1);
+  --sidebar-accent-foreground: oklch(0.955 0.008 91.5);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.68 0.15 42);
+  --sidebar-ring: oklch(0.852 0.173 89.5);
 }
 
 @layer base {
@@ -150,13 +157,23 @@
 @layer utilities {
   .font-display {
     font-family: var(--font-display);
+    /* peso di default per i titoli che non specificano un font-weight
+       (molte pagine usano "font-display italic" senza altro): la condensata
+       pesante del brand ha bisogno di più corpo del regular ereditato */
+    font-weight: 600;
   }
   .font-mono-num {
-    font-family: var(--font-mono);
+    /* niente font monospace: su una proporzionale i separatori (. , €) non
+       vengono forzati alla larghezza di una cifra, che è la causa dello
+       spaziamento illeggibile nei valori tipo "33.252,39 €". Le cifre
+       restano allineate in colonna grazie a tabular-nums. */
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1, "zero" 1;
+    letter-spacing: normal;
   }
   .bg-noise {
-    background-image: radial-gradient(oklch(0.2 0.015 55 / 0.035) 1px, transparent 1px);
+    background-image: radial-gradient(oklch(0.222 0.035 242 / 0.035) 1px, transparent 1px);
     background-size: 3px 3px;
   }
 }

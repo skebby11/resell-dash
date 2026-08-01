@@ -71,17 +71,23 @@ export function DistribuzioneDonut({ data }: { data: DistribuzioneVoce[] }) {
         </div>
       </div>
 
-      <ul className="flex w-full flex-col gap-1.5 text-sm">
+      <ul className="flex w-full min-w-0 flex-col gap-1.5 text-sm">
         {dataWithTotal.map((entry, i) => (
           <li key={entry.label} className="flex items-center justify-between gap-3">
-            <span className="flex items-center gap-2 text-muted-foreground">
+            {/* L'etichetta può troncare con ellissi (min-w-0 + truncate): il
+                valore numerico non deve mai restringersi, altrimenti si
+                taglia a metà cifra ("393" -> "39:") invece di andare a capo. */}
+            <span
+              className="flex min-w-0 items-center gap-2 truncate text-muted-foreground"
+              title={entry.label}
+            >
               <span
                 className="size-2.5 shrink-0 rounded-full"
                 style={{ background: PALETTE[i % PALETTE.length] }}
               />
-              {entry.label}
+              <span className="truncate">{entry.label}</span>
             </span>
-            <span className="font-mono-num font-medium text-foreground">
+            <span className="shrink-0 font-mono-num font-medium whitespace-nowrap text-foreground">
               {entry.value}
               <span className="ml-1 text-xs font-normal text-muted-foreground">
                 ({((entry.value / total) * 100).toFixed(0)}%)
