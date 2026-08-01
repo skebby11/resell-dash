@@ -1,14 +1,18 @@
-import type {
-  Articolo,
-  Categoria,
-  Destinazione,
-  DistribuzioneVoce,
-  FonteAcquisto,
-  PiattaformaVendita,
-  Prodotto,
-  StatoArticolo,
-  VenditaMensile,
+import {
+  DESTINAZIONI as DESTINAZIONI_NOTE,
+  FONTI_ACQUISTO,
+  PIATTAFORME_VENDITA,
+  type Articolo,
+  type Destinazione,
+  type FonteAcquisto,
+  type PiattaformaVendita,
+  type Prodotto,
+  type StatoArticolo,
 } from "@/types";
+
+// Dati dimostrativi deterministici. Non alimentano la dashboard, che legge da
+// Supabase e aggrega in SQL: servono come sorgente per il seed del catalogo
+// (`npm run seed`) e come fixture nei test.
 
 // --- PRNG deterministico (mulberry32) per avere dati mock stabili tra server e client ---
 function mulberry32(seed: number) {
@@ -24,7 +28,7 @@ function mulberry32(seed: number) {
 
 const rand = mulberry32(20260724);
 
-function pick<T>(arr: T[]): T {
+function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(rand() * arr.length)];
 }
 
@@ -202,9 +206,9 @@ export const prodottiMock: Prodotto[] = [
   },
 ];
 
-const FONTI: FonteAcquisto[] = ["Vinted", "Altro", "Amici/Parenti", "eBay"];
-const PIATTAFORME: PiattaformaVendita[] = ["eBay", "Vinted", "Wallapop"];
-const DESTINAZIONI: Destinazione[] = ["Italia", "Estero"];
+const FONTI: readonly FonteAcquisto[] = FONTI_ACQUISTO;
+const PIATTAFORME: readonly PiattaformaVendita[] = PIATTAFORME_VENDITA;
+const DESTINAZIONI: readonly Destinazione[] = DESTINAZIONI_NOTE;
 
 // mesi generati: Feb 2026 -> Lug 2026 (6 mesi, coerente con "oggi" 2026-07-24)
 const MESI = [
@@ -269,6 +273,7 @@ function generaArticoli(): Articolo[] {
       costoSpedizione: null,
       destinazione: null,
       spedizioniere: null,
+      note: null,
       prodottoSponsorizzato: false,
       venditaPostOfferta: false,
       profitto: null,
@@ -309,100 +314,7 @@ function generaArticoli(): Articolo[] {
 
 export const articoliMock: Articolo[] = generaArticoli();
 
-// --- Aggregazioni derivate per la dashboard ---
-
-// "Venduto" ai fini delle metriche = stato venduto/consegnato.
-const venduti = articoliMock.filter((a) => a.stato === "venduto" || a.stato === "consegnato");
-const nonVenduti = articoliMock.filter((a) => a.stato === "acquistato" || a.stato === "in vendita");
-// Sottoinsieme dei venduti con prezzo di vendita valorizzato: per costruzione un
-// articolo venduto/consegnato ha sempre prezzoVendita, ma le medie/i totali vanno
-// calcolati solo su questo sottoinsieme per restare null-safe anche con dati reali
-// (DB) dove l'invariante potrebbe non essere ancora garantita a runtime.
-const venditeConPrezzo = venduti.filter(
-  (a): a is typeof a & { prezzoVendita: number } => a.prezzoVendita != null
-);
-
-export const kpi = {
-  numeroVendite: venduti.length,
-  prezzoMedioVendita: round2(
-    venditeConPrezzo.reduce((s, a) => s + a.prezzoVendita, 0) / (venditeConPrezzo.length || 1)
-  ),
-  venditeTotali: round2(venditeConPrezzo.reduce((s, a) => s + a.prezzoVendita, 0)),
-  profittoTotale: round2(venduti.reduce((s, a) => s + (a.profitto ?? 0), 0)),
-  // Valore di stock a costo: somma dei costi d'acquisto degli articoli non ancora
-  // venduti/consegnati (capitale "congelato" in merce, non liquidità disponibile).
-  fondiImmobilizzati: round2(nonVenduti.reduce((s, a) => s + a.costoAcquisto, 0)),
-  /**
-   * "Capitale" = fondiImmobilizzati + profittoTotale.
-   * Non è un saldo di cassa reale: somma il valore a costo dello stock invenduto
-   * con l'utile netto già realizzato sulle vendite, come proxy del capitale
-   * complessivamente generato/impiegato dall'attività (stock + utili accumulati).
-   */
-  get capitale() {
-    return round2(this.fondiImmobilizzati + this.profittoTotale);
-  },
-};
-
-const MESE_LABEL = new Intl.DateTimeFormat("it-IT", { month: "short", year: "numeric" });
-
-export function venditePerMese(): VenditaMensile[] {
-  const gruppi = new Map<string, Articolo[]>();
-  for (const a of venduti) {
-    if (!a.dataVendita) continue;
-    const chiave = a.dataVendita.slice(0, 7); // YYYY-MM
-    if (!gruppi.has(chiave)) gruppi.set(chiave, []);
-    gruppi.get(chiave)!.push(a);
-  }
-
-  return Array.from(gruppi.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([mese, items]) => {
-      // Media/totale vendite solo sugli articoli con prezzoVendita valorizzato.
-      const itemsConPrezzo = items.filter(
-        (a): a is typeof a & { prezzoVendita: number } => a.prezzoVendita != null
-      );
-      const totale = round2(itemsConPrezzo.reduce((s, a) => s + a.prezzoVendita, 0));
-      const profitto = round2(items.reduce((s, a) => s + (a.profitto ?? 0), 0));
-      const [anno, m] = mese.split("-").map(Number);
-      const label = MESE_LABEL.format(new Date(Date.UTC(anno, m - 1, 1)));
-      return {
-        mese,
-        meseLabel: label.charAt(0).toUpperCase() + label.slice(1),
-        numeroVendite: items.length,
-        totaleVendite: totale,
-        prezzoMedio: round2(totale / (itemsConPrezzo.length || 1)),
-        profitto,
-      };
-    });
-}
-
-function distribuzione<T extends string>(
-  items: Articolo[],
-  key: (a: Articolo) => T | null | undefined
-): DistribuzioneVoce[] {
-  const conteggio = new Map<string, number>();
-  for (const a of items) {
-    const v = key(a);
-    if (!v) continue;
-    conteggio.set(v, (conteggio.get(v) ?? 0) + 1);
-  }
-  return Array.from(conteggio.entries()).map(([label, value]) => ({ label, value }));
-}
-
-export function venditePerCategoria(): DistribuzioneVoce[] {
-  return distribuzione(venduti, (a) => a.categoria);
-}
-
-export function venditePerPiattaforma(): DistribuzioneVoce[] {
-  return distribuzione(venduti, (a) => a.piattaformaVendita);
-}
-
-export function venditePerFonte(): DistribuzioneVoce[] {
-  return distribuzione(venduti, (a) => a.fonteAcquisto);
-}
-
-export function venditePerDestinazione(): DistribuzioneVoce[] {
-  return distribuzione(venduti, (a) => a.destinazione);
-}
-
-export const CATEGORIE: Categoria[] = ["Videogiochi", "Console", "Controller", "Accessori"];
+// Le aggregazioni (KPI, andamento mensile, ripartizioni) non vivono più in
+// TypeScript: sono viste Postgres (`v_kpi`, `v_vendite_mensili`,
+// `v_distribuzione_*`), perché leggere le righe per sommarle lato applicazione
+// si scontrava con il limite di 1000 righe di PostgREST, che tronca in silenzio.
