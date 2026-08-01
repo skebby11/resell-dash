@@ -54,3 +54,6 @@ next-env.d.ts
 .agents/
 .claude/skills/
 skills-lock.json
+
+# config MCP locale (contiene il project ref del progetto Supabase)
+.mcp.json
