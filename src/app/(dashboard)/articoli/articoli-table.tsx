@@ -10,9 +10,18 @@ import {
 } from "@/components/ui/table";
 import { StatoBadge } from "@/components/dashboard/stato-badge";
 import { formatCurrency, formatDate } from "@/lib/format";
-import type { Articolo } from "@/types";
+import { nomePaese, type Articolo } from "@/types";
 import { AzioniStato } from "./azioni-stato";
 import { VenditaDialog } from "./vendita-dialog";
+
+const VENDUTO_STATI = new Set(["venduto", "consegnato"]);
+
+/** Testo della colonna Paese: distingue "non ancora venduto" da "venduto ma senza paese noto". */
+function testoPaese(a: Articolo): { testo: string; lacuna: boolean } {
+  if (!VENDUTO_STATI.has(a.stato)) return { testo: "—", lacuna: false };
+  if (a.paeseVendita) return { testo: nomePaese(a.paeseVendita), lacuna: false };
+  return { testo: a.destinazione === "Estero" ? "Estero (?)" : "?", lacuna: true };
+}
 
 /**
  * Tabella della pagina corrente. Riceve righe già filtrate e paginate dal
@@ -36,6 +45,7 @@ export function ArticoliTable({ articoli }: { articoli: Articolo[] }) {
               <TableHead>Data vendita</TableHead>
               <TableHead className="text-right">Prezzo vendita</TableHead>
               <TableHead>Piattaforma</TableHead>
+              <TableHead>Paese</TableHead>
               <TableHead className="text-right">Profitto</TableHead>
               <TableHead className="text-right">
                 <span className="sr-only">Azioni</span>
@@ -77,6 +87,13 @@ export function ArticoliTable({ articoli }: { articoli: Articolo[] }) {
                   {a.piattaformaVendita ?? "—"}
                 </TableCell>
                 <TableCell
+                  className={
+                    testoPaese(a).lacuna ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+                  }
+                >
+                  {testoPaese(a).testo}
+                </TableCell>
+                <TableCell
                   className={`text-right font-mono-num ${
                     a.profitto != null ? (a.profitto >= 0 ? "text-positive" : "text-negative") : ""
                   }`}
@@ -93,7 +110,7 @@ export function ArticoliTable({ articoli }: { articoli: Articolo[] }) {
             ))}
             {articoli.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={11} className="py-10 text-center text-muted-foreground">
                   Nessun articolo corrisponde ai filtri.
                 </TableCell>
               </TableRow>

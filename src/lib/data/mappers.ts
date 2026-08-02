@@ -64,6 +64,7 @@ export function toArticolo(row: RigaArticoloConProdotto): Articolo {
     fee: numero(row.fee),
     costoSpedizione: numero(row.costo_spedizione),
     destinazione: row.destinazione,
+    paeseVendita: row.paese_vendita,
     spedizioniere: row.spedizioniere,
     note: row.note,
     prodottoSponsorizzato: row.prodotto_sponsorizzato,

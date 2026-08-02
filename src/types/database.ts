@@ -28,6 +28,7 @@ export type Database = {
           fonte_acquisto: string;
           id: string;
           note: string | null;
+          paese_vendita: string | null;
           piattaforma_vendita: string | null;
           prezzo_vendita: number | null;
           prodotto_id: string;
@@ -48,10 +49,12 @@ export type Database = {
           fonte_acquisto: string;
           id?: string;
           note?: string | null;
+          paese_vendita?: string | null;
           piattaforma_vendita?: string | null;
           prezzo_vendita?: number | null;
           prodotto_id: string;
           prodotto_sponsorizzato?: boolean;
+          profitto?: number | null;
           spedizioniere?: string | null;
           stato?: string;
           vendita_post_offerta?: boolean;
@@ -67,10 +70,12 @@ export type Database = {
           fonte_acquisto?: string;
           id?: string;
           note?: string | null;
+          paese_vendita?: string | null;
           piattaforma_vendita?: string | null;
           prezzo_vendita?: number | null;
           prodotto_id?: string;
           prodotto_sponsorizzato?: boolean;
+          profitto?: number | null;
           spedizioniere?: string | null;
           stato?: string;
           vendita_post_offerta?: boolean;
@@ -175,6 +180,21 @@ export type Database = {
         Row: { label: string | null; value: number | null };
         Relationships: [];
       };
+      v_vendite_per_paese_anno: {
+        Row: {
+          anno: number | null;
+          paese: string | null;
+          numero_vendite: number | null;
+          totale_vendite: number | null;
+          profitto_totale: number | null;
+          // Aggiunta da 0012: per le righe paese=null distingue 'Estero'
+          // (certamente fuori Italia, paese ignoto) da null (destinazione
+          // stessa ignota). Per le righe con paese noto è deterministica
+          // ('Italia' o 'Estero') e non aggiunge informazione.
+          destinazione: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       ricalcola_prezzi_medi: { Args: never; Returns: undefined };
@@ -184,6 +204,46 @@ export type Database = {
       show_limit: { Args: never; Returns: number };
       show_trgm: { Args: { "": string }; Returns: string[] };
       utente_autorizzato: { Args: never; Returns: boolean };
+      // Funzioni RPC del filtro periodo (0010_funzioni_dashboard_periodo.sql):
+      // p_da/p_a nulli = nessun limite. Tenute in un'unica implementazione,
+      // di cui le viste v_kpi/v_vendite_mensili/v_distribuzione_* sono involucri.
+      dashboard_kpi: {
+        Args: { p_da: string | null; p_a: string | null };
+        Returns: {
+          numero_vendite: number;
+          prezzo_medio_vendita: number;
+          vendite_totali: number;
+          profitto_totale: number;
+          fondi_immobilizzati: number;
+          capitale: number;
+        }[];
+      };
+      dashboard_vendite_mensili: {
+        Args: { p_da: string | null; p_a: string | null };
+        Returns: {
+          mese: string;
+          numero_vendite: number;
+          prezzo_medio_vendita: number;
+          totale_vendite: number;
+          profitto_totale: number;
+        }[];
+      };
+      dashboard_distribuzione_categoria: {
+        Args: { p_da: string | null; p_a: string | null };
+        Returns: { label: string; value: number }[];
+      };
+      dashboard_distribuzione_piattaforma: {
+        Args: { p_da: string | null; p_a: string | null };
+        Returns: { label: string; value: number }[];
+      };
+      dashboard_distribuzione_fonte: {
+        Args: { p_da: string | null; p_a: string | null };
+        Returns: { label: string; value: number }[];
+      };
+      dashboard_distribuzione_destinazione: {
+        Args: { p_da: string | null; p_a: string | null };
+        Returns: { label: string; value: number }[];
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

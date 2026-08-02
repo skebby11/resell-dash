@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Gauge, ListTree, PackagePlus, Settings2, SquareLibrary } from "lucide-react";
+import { Gauge, Globe2, ListTree, PackagePlus, Settings2, SquareLibrary } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -32,6 +32,12 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Inserimento",
     icon: PackagePlus,
     description: "Registra un nuovo acquisto",
+  },
+  {
+    href: "/vendite-ue",
+    label: "Vendite UE",
+    icon: Globe2,
+    description: "Totali per paese e anno solare",
   },
   {
     href: "/impostazioni",

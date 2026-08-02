@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { importoOpzionale, parseInserimento, parseVendita } from "@/lib/validazione";
+import { PAESI_UE } from "@/types";
 
 const ID = "3542aae4-7fa7-4882-84fb-dfd1c2e07ade";
 
@@ -216,5 +217,67 @@ describe("parseVendita", () => {
     expect(r.valori.piattaformaVendita).toBeNull();
     expect(r.valori.destinazione).toBeNull();
     expect(r.valori.spedizioniere).toBeNull();
+  });
+});
+
+describe("parseVendita — paese di vendita", () => {
+  const base = {
+    id: ID,
+    stato: "venduto",
+    data_vendita: "2026-07-30",
+    prezzo_vendita: "45,00",
+  };
+
+  it("destinazione Italia impone sempre paese IT, qualunque cosa mandi il client", () => {
+    const r1 = parseVendita(fd({ ...base, destinazione: "Italia" }));
+    const r2 = parseVendita(fd({ ...base, destinazione: "Italia", paese_vendita: "FR" }));
+    expect(r1.ok && r1.valori.paeseVendita).toBe("IT");
+    expect(r2.ok && r2.valori.paeseVendita).toBe("IT");
+  });
+
+  it("destinazione Estero con un paese UE valido lo accetta", () => {
+    const r = parseVendita(fd({ ...base, destinazione: "Estero", paese_vendita: "FR" }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valori.destinazione).toBe("Estero");
+    expect(r.valori.paeseVendita).toBe("FR");
+  });
+
+  it("destinazione Estero senza paese è una lacuna legittima, non un errore", () => {
+    const r = parseVendita(fd({ ...base, destinazione: "Estero" }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valori.paeseVendita).toBeNull();
+  });
+
+  it("rifiuta un codice paese non fra i 27 stati UE (es. Regno Unito, post Brexit)", () => {
+    const r = parseVendita(fd({ ...base, destinazione: "Estero", paese_vendita: "GB" }));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.campi.paese_vendita).toMatch(/non valido/);
+  });
+
+  it("rifiuta IT come paese quando la destinazione è Estero (incoerente)", () => {
+    const r = parseVendita(fd({ ...base, destinazione: "Estero", paese_vendita: "IT" }));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.campi.paese_vendita).toMatch(/non valido/);
+  });
+
+  it("senza destinazione il paese resta ignoto, senza errore", () => {
+    const r = parseVendita(fd(base));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valori.destinazione).toBeNull();
+    expect(r.valori.paeseVendita).toBeNull();
+  });
+
+  it("accetta tutti e 27 i codici dell'elenco UE quando la destinazione è Estero", () => {
+    for (const { codice } of PAESI_UE) {
+      if (codice === "IT") continue;
+      const r = parseVendita(fd({ ...base, destinazione: "Estero", paese_vendita: codice }));
+      expect(r.ok, `codice ${codice}`).toBe(true);
+      if (r.ok) expect(r.valori.paeseVendita).toBe(codice);
+    }
   });
 });

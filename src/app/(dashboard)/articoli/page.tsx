@@ -13,11 +13,15 @@ export default async function ArticoliPage({
   searchParams,
 }: {
   // In Next.js 16 searchParams è asincrono.
-  searchParams: Promise<{ stato?: string; q?: string; p?: string }>;
+  searchParams: Promise<{ stato?: string; q?: string; p?: string; paese?: string }>;
 }) {
   const params = await searchParams;
   const stato = normalizzaStato(params.stato);
   const q = params.q?.trim() || undefined;
+  // `?paese=mancante`: collegamento da /vendite-ue per isolare le vendite
+  // senza paese noto e correggerle. Sovrascrive il filtro di stato (le
+  // vendite senza paese sono per forza venduto/consegnato).
+  const senzaPaese = params.paese === "mancante";
 
   // `pagina` dal risultato e non dal parametro: una richiesta fuori intervallo
   // viene riportata all'ultima pagina valida, e l'indicatore deve dire dove
@@ -25,12 +29,13 @@ export default async function ArticoliPage({
   const { righe, totale, pagina } = await getArticoliPaginati({
     stato,
     q,
+    senzaPaese,
     pagina: normalizzaPagina(params.p),
   });
 
   // Nessun filtro attivo e zero risultati: il magazzino è davvero vuoto, non è
   // una ricerca senza esiti.
-  if (totale === 0 && !stato && !q) {
+  if (totale === 0 && !stato && !q && !senzaPaese) {
     return (
       <StatoVuoto
         titolo="Magazzino vuoto"
@@ -42,7 +47,8 @@ export default async function ArticoliPage({
 
   function hrefPagina(p: number) {
     const qs = new URLSearchParams();
-    if (stato) qs.set("stato", stato);
+    if (senzaPaese) qs.set("paese", "mancante");
+    else if (stato) qs.set("stato", stato);
     if (q) qs.set("q", q);
     if (p > 1) qs.set("p", String(p));
     const s = qs.toString();
@@ -51,7 +57,7 @@ export default async function ArticoliPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <Filtri stato={stato} q={q} />
+      <Filtri stato={stato} q={q} senzaPaese={senzaPaese} />
       <ArticoliTable articoli={righe} />
       <Paginazione
         pagina={pagina}
