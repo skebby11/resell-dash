@@ -1,6 +1,7 @@
 "use client";
 
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { useState } from "react";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import type { DistribuzioneVoce } from "@/types";
 
 const PALETTE = [
@@ -11,28 +12,19 @@ const PALETTE = [
   "var(--chart-5)",
 ];
 
-function DonutTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: { name: string; value: number; payload: { total: number } }[];
-}) {
-  if (!active || !payload?.length) return null;
-  const entry = payload[0];
-  const pct = entry.payload.total > 0 ? ((entry.value / entry.payload.total) * 100).toFixed(0) : "0";
-  return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
-      <p className="font-medium text-popover-foreground">{entry.name}</p>
-      <p className="text-muted-foreground">
-        <span className="font-mono-num font-medium text-foreground">{entry.value}</span> vendite ·{" "}
-        {pct}%
-      </p>
-    </div>
-  );
-}
-
 export function DistribuzioneDonut({ data }: { data: DistribuzioneVoce[] }) {
+  // Niente <Tooltip>: Recharts ancora il tooltip al punto medio (metà raggio,
+  // metà angolo) della fetta puntata, che per un donut così stretto (168px,
+  // innerRadius 52/outerRadius 78) cade vicino al centro. Il clamp di default
+  // (allowEscapeViewBox false) impedisce solo di sforare il bordo vicino al
+  // cursore, non quello opposto: se il riquadro del tooltip è più largo dello
+  // spazio residuo — inevitabile in un contenitore così piccolo — sfora
+  // comunque fuori dalla card e si sovrappone al totale al centro. Il centro
+  // diventa quindi il display della fetta puntata: stesso dato del tooltip,
+  // nessuna sovrapposizione, e resta disponibile senza mouse perché la
+  // legenda a fianco lo riporta già.
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
   const total = data.reduce((s, d) => s + d.value, 0);
   const dataWithTotal = data.map((d) => ({ ...d, total }));
 
@@ -43,6 +35,9 @@ export function DistribuzioneDonut({ data }: { data: DistribuzioneVoce[] }) {
       </div>
     );
   }
+
+  const active = activeIndex !== null ? dataWithTotal[activeIndex] : null;
+  const activePct = active ? ((active.value / total) * 100).toFixed(0) : null;
 
   return (
     <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-5">
@@ -57,17 +52,33 @@ export function DistribuzioneDonut({ data }: { data: DistribuzioneVoce[] }) {
               outerRadius={78}
               paddingAngle={2}
               strokeWidth={0}
+              onMouseEnter={(_, i) => setActiveIndex(i)}
+              onMouseLeave={() => setActiveIndex(null)}
             >
               {dataWithTotal.map((entry, i) => (
-                <Cell key={entry.label} fill={PALETTE[i % PALETTE.length]} />
+                <Cell
+                  key={entry.label}
+                  fill={PALETTE[i % PALETTE.length]}
+                  opacity={active === null || i === activeIndex ? 1 : 0.35}
+                />
               ))}
             </Pie>
-            <Tooltip content={<DonutTooltip />} />
           </PieChart>
         </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-mono-num text-xl font-semibold text-foreground">{total}</span>
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">totale</span>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
+          {active ? (
+            <>
+              <span className="font-mono-num text-xl font-semibold text-foreground">{active.value}</span>
+              <span className="w-full truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+                {active.label} · {activePct}%
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="font-mono-num text-xl font-semibold text-foreground">{total}</span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">totale</span>
+            </>
+          )}
         </div>
       </div>
 
