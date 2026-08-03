@@ -1,4 +1,4 @@
-import { PAESI_UE, STATI_ARTICOLO, type StatoArticolo } from "@/types";
+import { PAESI_UE, STATI_ARTICOLO, TIPI_CANALE, type StatoArticolo, type TipoCanale } from "@/types";
 
 /**
  * Parsing e validazione dei dati dei form, separati dalle server action.
@@ -213,4 +213,28 @@ export function parseVendita(formData: FormData): Esito<ValoriVendita, CampoVend
       venditaPostOfferta: spuntata(formData, "vendita_post_offerta"),
     },
   };
+}
+
+// -------------------------------------------------------------- canali ----
+
+/** Uno dei tre tipi ammessi, o `undefined` se il valore grezzo non è tra questi. */
+export function parseTipoCanale(raw: string): TipoCanale | undefined {
+  return (TIPI_CANALE as readonly string[]).includes(raw) ? (raw as TipoCanale) : undefined;
+}
+
+/**
+ * Nome di un canale: stessa normalizzazione spazi del nome prodotto
+ * (`parseInserimento`), limite di lunghezza allineato al CHECK del database
+ * (`length(nome) <= 60`) così l'errore si vede nel form, non come messaggio
+ * grezzo di Postgres.
+ */
+export function parseNomeCanale(raw: string): string | undefined {
+  const nome = raw.trim().replace(/\s+/g, " ");
+  if (!nome || nome.length > 60) return undefined;
+  return nome;
+}
+
+/** Confronto fra nomi canale: case-insensitive, come l'indice unico `ux_canali_tipo_nome`. */
+export function stessoNomeCanale(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
 }

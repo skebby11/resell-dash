@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/format";
-import { CATEGORIE, PIATTAFORME_GIOCO, FONTI_ACQUISTO } from "@/types";
+import { CATEGORIE, PIATTAFORME_GIOCO } from "@/types";
 import { creaArticolo, type StatoInserimento } from "./actions";
 
 export interface ProdottoNoto {
@@ -213,9 +213,12 @@ function ScansioneBarcode({ onRilevato }: { onRilevato: (codice: string) => void
  */
 function CampiInserimento({
   prodotti,
+  fontiAcquisto,
   campi,
 }: {
   prodotti: ProdottoNoto[];
+  /** Canali attivi letti dal database (0013_canali_configurabili), non più una costante. */
+  fontiAcquisto: string[];
   campi: StatoInserimento["campi"];
 }) {
   const [nome, setNome] = useState("");
@@ -634,13 +637,15 @@ function CampiInserimento({
           name="fonte_acquisto"
           list="lista-fonti"
           autoComplete="off"
-          defaultValue="Vinted"
+          // Il canale più usato è il primo dell'elenco attivo (ordinabile da
+          // Impostazioni): resta il default plausibile senza cablarne uno.
+          defaultValue={fontiAcquisto[0] ?? ""}
           placeholder="Da dove arriva?"
           aria-invalid={Boolean(campi?.fonte_acquisto)}
           aria-describedby={campi?.fonte_acquisto ? "errore-fonte" : undefined}
         />
         <datalist id="lista-fonti">
-          {FONTI_ACQUISTO.map((f) => (
+          {fontiAcquisto.map((f) => (
             <option key={f} value={f} />
           ))}
         </datalist>
@@ -664,7 +669,13 @@ function CampiInserimento({
   );
 }
 
-export function InserimentoForm({ prodotti }: { prodotti: ProdottoNoto[] }) {
+export function InserimentoForm({
+  prodotti,
+  fontiAcquisto,
+}: {
+  prodotti: ProdottoNoto[];
+  fontiAcquisto: string[];
+}) {
   const [stato, action] = useActionState<StatoInserimento, FormData>(creaArticolo, { seq: 0 });
 
   // I toast sì possono stare in un effect: sonner è un sistema esterno, non
@@ -690,7 +701,12 @@ export function InserimentoForm({ prodotti }: { prodotti: ProdottoNoto[] }) {
 
   return (
     <form action={action} className="flex flex-col gap-4">
-      <CampiInserimento key={stato.seq} prodotti={prodotti} campi={stato.campi} />
+      <CampiInserimento
+        key={stato.seq}
+        prodotti={prodotti}
+        fontiAcquisto={fontiAcquisto}
+        campi={stato.campi}
+      />
       <BottoneSalva />
     </form>
   );

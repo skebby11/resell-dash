@@ -3,12 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 import { toArticolo, toProdotto, type RigaArticoloConProdotto } from "./mappers";
 import {
   STATI_ARTICOLO,
+  TIPI_CANALE,
   type Articolo,
+  type Canale,
   type DistribuzioneVoce,
   type Kpi,
   type Prodotto,
   type StatoArticolo,
   type SubtotaleVendite,
+  type TipoCanale,
   type VenditaMensile,
   type VenditaPerPaeseAnno,
 } from "@/types";
@@ -435,6 +438,80 @@ export async function getProdottoPerBarcode(barcode: string): Promise<Prodotto |
     .maybeSingle();
   if (error) erroreLettura("prodotto per barcode", error.message);
   return data ? toProdotto(data) : null;
+}
+
+/**
+ * Nomi dei canali attivi di un tipo, in ordine di preferenza, per popolare i
+ * `datalist` dei form (0013_canali_configurabili). Solo attivi: un canale
+ * disattivato non deve più comparire come suggerimento, pur restando leggibile
+ * nello storico che già lo usa.
+ */
+export async function getCanaliAttivi(tipo: TipoCanale): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("canali")
+    .select("nome")
+    .eq("tipo", tipo)
+    .eq("attivo", true)
+    .order("ordine", { ascending: true })
+    .order("nome", { ascending: true });
+  if (error) erroreLettura(`canali (${tipo})`, error.message);
+  return (data ?? []).map((r) => r.nome);
+}
+
+/**
+ * Tutti i canali configurati (attivi e disattivati), con quanti articoli
+ * storici usano ancora esattamente quel nome — a supporto della pagina
+ * Impostazioni, per capire cosa si sta disattivando prima di farlo.
+ *
+ * Include anche le stringhe presenti in `articoli` che non corrispondono a
+ * nessun canale configurato (rinominato in passato, o mai censito): senza
+ * questo elenco sparirebbero silenziosamente dalla gestione, pur restando
+ * (correttamente) nelle statistiche.
+ */
+export async function getCanaliConConteggio(): Promise<{
+  canali: Canale[];
+  orfani: { tipo: TipoCanale; nome: string; conteggioArticoli: number }[];
+}> {
+  const supabase = await createClient();
+  const [canaliRes, conteggiRes] = await Promise.all([
+    supabase.from("canali").select("*").order("tipo").order("ordine").order("nome"),
+    supabase.from("v_conteggio_canali").select("*"),
+  ]);
+  if (canaliRes.error) erroreLettura("canali", canaliRes.error.message);
+  if (conteggiRes.error) erroreLettura("conteggio canali", conteggiRes.error.message);
+
+  // Chiave tipo/nome case-insensitive: coerente con l'unicità imposta da
+  // `ux_canali_tipo_nome`, che tratta "eBay" e "ebay" come lo stesso canale.
+  const chiave = (tipo: string | null, nome: string | null) => `${tipo}\u0000${nome?.toLowerCase()}`;
+  const conteggi = new Map<string, number>();
+  for (const r of conteggiRes.data ?? []) {
+    if (r.tipo == null || r.nome == null) continue;
+    conteggi.set(chiave(r.tipo, r.nome), r.conteggio ?? 0);
+  }
+
+  const usati = new Set<string>();
+  const canali: Canale[] = (canaliRes.data ?? [])
+    .filter((r): r is typeof r & { tipo: TipoCanale } => (TIPI_CANALE as readonly string[]).includes(r.tipo))
+    .map((r) => {
+      usati.add(chiave(r.tipo, r.nome));
+      return {
+        id: r.id,
+        tipo: r.tipo,
+        nome: r.nome,
+        attivo: r.attivo,
+        ordine: r.ordine,
+        conteggioArticoli: conteggi.get(chiave(r.tipo, r.nome)) ?? 0,
+      };
+    });
+
+  const orfani = (conteggiRes.data ?? [])
+    .filter((r): r is { tipo: TipoCanale; nome: string; conteggio: number | null } =>
+      r.tipo != null && r.nome != null && (TIPI_CANALE as readonly string[]).includes(r.tipo) && !usati.has(chiave(r.tipo, r.nome))
+    )
+    .map((r) => ({ tipo: r.tipo, nome: r.nome, conteggioArticoli: r.conteggio ?? 0 }));
+
+  return { canali, orfani };
 }
 
 /** Stato valido a partire da un parametro di query non fidato. */

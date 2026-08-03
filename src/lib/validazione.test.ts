@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { importoOpzionale, parseInserimento, parseVendita } from "@/lib/validazione";
+import {
+  importoOpzionale,
+  parseInserimento,
+  parseNomeCanale,
+  parseTipoCanale,
+  parseVendita,
+  stessoNomeCanale,
+} from "@/lib/validazione";
 import { PAESI_UE } from "@/types";
 
 const ID = "3542aae4-7fa7-4882-84fb-dfd1c2e07ade";
@@ -279,5 +286,43 @@ describe("parseVendita — paese di vendita", () => {
       expect(r.ok, `codice ${codice}`).toBe(true);
       if (r.ok) expect(r.valori.paeseVendita).toBe(codice);
     }
+  });
+});
+
+describe("parseTipoCanale", () => {
+  it("accetta esattamente i tre tipi noti", () => {
+    expect(parseTipoCanale("piattaforma_vendita")).toBe("piattaforma_vendita");
+    expect(parseTipoCanale("fonte_acquisto")).toBe("fonte_acquisto");
+    expect(parseTipoCanale("spedizioniere")).toBe("spedizioniere");
+  });
+
+  it("rifiuta qualunque altro valore", () => {
+    for (const v of ["", "categoria", "Piattaforma_Vendita", "spedizionieri"]) {
+      expect(parseTipoCanale(v), `valore ${v}`).toBeUndefined();
+    }
+  });
+});
+
+describe("parseNomeCanale", () => {
+  it("normalizza gli spazi come il nome prodotto", () => {
+    expect(parseNomeCanale("  Poste   Italiane  ")).toBe("Poste Italiane");
+  });
+
+  it("rifiuta il nome vuoto", () => {
+    expect(parseNomeCanale("")).toBeUndefined();
+    expect(parseNomeCanale("   ")).toBeUndefined();
+  });
+
+  it("rifiuta oltre 60 caratteri, allineato al CHECK del database", () => {
+    expect(parseNomeCanale("x".repeat(60))).toBe("x".repeat(60));
+    expect(parseNomeCanale("x".repeat(61))).toBeUndefined();
+  });
+});
+
+describe("stessoNomeCanale", () => {
+  it("confronta senza distinguere maiuscole/minuscole, come l'indice unico", () => {
+    expect(stessoNomeCanale("eBay", "ebay")).toBe(true);
+    expect(stessoNomeCanale("eBay", "EBAY")).toBe(true);
+    expect(stessoNomeCanale("eBay", "Vinted")).toBe(false);
   });
 });

@@ -30,7 +30,16 @@ function testoPaese(a: Articolo): { testo: string; lacuna: boolean } {
  * È un componente client solo perché le azioni per riga (dialog di vendita,
  * cambi di stato) hanno bisogno di interattività.
  */
-export function ArticoliTable({ articoli }: { articoli: Articolo[] }) {
+export function ArticoliTable({
+  articoli,
+  piattaformeVendita,
+  spedizionieri,
+}: {
+  articoli: Articolo[];
+  /** Canali attivi letti dal database (0013_canali_configurabili). */
+  piattaformeVendita: string[];
+  spedizionieri: string[];
+}) {
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm">
       <div className="overflow-x-auto">
@@ -102,7 +111,11 @@ export function ArticoliTable({ articoli }: { articoli: Articolo[] }) {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-0.5">
-                    <VenditaDialog articolo={a} />
+                    <VenditaDialog
+                      articolo={a}
+                      piattaformeVendita={piattaformeVendita}
+                      spedizionieri={spedizionieri}
+                    />
                     <AzioniStato articolo={a} />
                   </div>
                 </TableCell>

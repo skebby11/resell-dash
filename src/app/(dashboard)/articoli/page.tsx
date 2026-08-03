@@ -3,6 +3,7 @@ import { StatoVuoto } from "@/components/dashboard/stato-vuoto";
 import {
   ARTICOLI_PER_PAGINA,
   getArticoliPaginati,
+  getCanaliAttivi,
   normalizzaPagina,
   normalizzaStato,
 } from "@/lib/data/queries";
@@ -26,12 +27,11 @@ export default async function ArticoliPage({
   // `pagina` dal risultato e non dal parametro: una richiesta fuori intervallo
   // viene riportata all'ultima pagina valida, e l'indicatore deve dire dove
   // siamo davvero.
-  const { righe, totale, pagina } = await getArticoliPaginati({
-    stato,
-    q,
-    senzaPaese,
-    pagina: normalizzaPagina(params.p),
-  });
+  const [{ righe, totale, pagina }, piattaformeVendita, spedizionieri] = await Promise.all([
+    getArticoliPaginati({ stato, q, senzaPaese, pagina: normalizzaPagina(params.p) }),
+    getCanaliAttivi("piattaforma_vendita"),
+    getCanaliAttivi("spedizioniere"),
+  ]);
 
   // Nessun filtro attivo e zero risultati: il magazzino è davvero vuoto, non è
   // una ricerca senza esiti.
@@ -58,7 +58,11 @@ export default async function ArticoliPage({
   return (
     <div className="flex flex-col gap-4">
       <Filtri stato={stato} q={q} senzaPaese={senzaPaese} />
-      <ArticoliTable articoli={righe} />
+      <ArticoliTable
+        articoli={righe}
+        piattaformeVendita={piattaformeVendita}
+        spedizionieri={spedizionieri}
+      />
       <Paginazione
         pagina={pagina}
         perPagina={ARTICOLI_PER_PAGINA}

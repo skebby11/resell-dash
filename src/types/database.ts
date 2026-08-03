@@ -90,6 +90,36 @@ export type Database = {
           },
         ];
       };
+      // Piattaforme di vendita, fonti di acquisto e spedizionieri configurabili
+      // (0013_canali_configurabili): `tipo` distingue le tre entità, non è un
+      // enum Postgres perché sono valori di dati, non uno schema chiuso.
+      canali: {
+        Row: {
+          attivo: boolean;
+          created_at: string;
+          id: string;
+          nome: string;
+          ordine: number;
+          tipo: string;
+        };
+        Insert: {
+          attivo?: boolean;
+          created_at?: string;
+          id?: string;
+          nome: string;
+          ordine?: number;
+          tipo: string;
+        };
+        Update: {
+          attivo?: boolean;
+          created_at?: string;
+          id?: string;
+          nome?: string;
+          ordine?: number;
+          tipo?: string;
+        };
+        Relationships: [];
+      };
       impostazioni: {
         Row: { chiave: string; created_at: string; id: string; valore: Json | null };
         Insert: { chiave: string; created_at?: string; id?: string; valore?: Json | null };
@@ -162,6 +192,13 @@ export type Database = {
           fondi_immobilizzati: number | null;
           capitale: number | null;
         };
+        Relationships: [];
+      };
+      // Conteggio articoli per stringa storica di canale, per tipo (0013):
+      // a supporto della pagina Impostazioni, per mostrare quanti articoli
+      // usano ciascun canale prima di disattivarlo o rinominarlo.
+      v_conteggio_canali: {
+        Row: { conteggio: number | null; nome: string | null; tipo: string | null };
         Relationships: [];
       };
       v_distribuzione_categoria: {
