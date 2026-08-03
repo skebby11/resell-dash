@@ -128,6 +128,45 @@ npm run import -- --file "/path/to/Inventario.csv"
 The importer refuses to run when `articoli` is non-empty (pass `--append` to override), because
 items have no natural key and a second run would create indistinguishable duplicates.
 
+For a re-export of a sheet you already imported, use `--incrementale` instead: it does not require
+an empty table and does not delete anything. It does three things, not just inserts:
+
+1. **Inserts rows that are new.** "New" is decided by an exact fingerprint (normalized name,
+   purchase date, purchase cost) against what's already in `articoli` — a different cost usually
+   means a physically different item (confirmed with the sheet's owner), so nothing is deduplicated
+   on name alone. When an inserted row shares a name with an existing item but the date/cost differ,
+   an informational warning is printed, worth a manual glance.
+2. **Updates the sale-side fields of a row already imported** when the sheet now shows it as sold
+   (e.g. `acquistato` → `Venduto - Consegnato`) — the owner records sales in the sheet over time, so
+   a re-export commonly carries new sales on old rows, not just new purchases. Only sale-side columns
+   are ever touched (`stato`, `data_vendita`, `prezzo_vendita`, `piattaforma_vendita`, `fee`,
+   `costo_spedizione`, `destinazione`, `paese_vendita`, `spedizioniere`, `prodotto_sponsorizzato`,
+   `vendita_post_offerta`); purchase-side fields (`data_acquisto`, `fonte_acquisto`, `note`,
+   `prodotto_id`) and the generated `profitto` column are never written. An update only ever applies
+   when the fingerprint identifies **exactly one** matching article — zero or more than one match is
+   skipped and reported, never guessed. If the database already has sale data that **differs** from
+   the sheet, it is **not overwritten** — the owner also records sales from the app, so a silent
+   overwrite could destroy a hand-entered value — it is listed as a conflict instead.
+3. **Corrects the purchase cost**, under strict conditions: same normalized name and purchase date,
+   different cost, with a unique match on both the sheet and the database side. Two distinct
+   purchases of the same item on the same day at two different costs aren't plausible; it's read as
+   the same physical item with a corrected cost, so both the cost and the sale-side fields are
+   updated together (never inserted as a duplicate). Every correction is listed individually in the
+   output, never applied silently.
+
+```bash
+npm run import -- --file "/path/to/Inventario.csv" --incrementale --dry-run
+npm run import -- --file "/path/to/Inventario.csv" --incrementale
+```
+
+`--dry-run` prints inserts, updates (before → after), cost corrections, conflicts and skips
+separately, plus the projected final totals (item count, revenue, profit) — check the arithmetic
+before running for real.
+
+The classification logic lives in [`src/lib/import-incrementale.ts`](./src/lib/import-incrementale.ts),
+covered by its own unit tests, kept separate from the Supabase I/O so it's testable without a
+database.
+
 It expects the column layout of the "FLIP DASHBOARD - Inventario" sheet. The non-obvious
 transformations are documented at the top of
 [`scripts/import-csv.ts`](./scripts/import-csv.ts); the ones worth knowing about:
