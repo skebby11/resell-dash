@@ -1,4 +1,4 @@
-import { STATI_ARTICOLO, type StatoArticolo } from "@/types";
+import { PAESI_UE, STATI_ARTICOLO, type StatoArticolo } from "@/types";
 
 /**
  * Parsing e validazione dei dati dei form, separati dalle server action.
@@ -102,7 +102,12 @@ export function parseInserimento(
 
 // ------------------------------------------------------------- vendita ----
 
-export type CampoVendita = "data_vendita" | "prezzo_vendita" | "fee" | "costo_spedizione";
+export type CampoVendita =
+  | "data_vendita"
+  | "prezzo_vendita"
+  | "fee"
+  | "costo_spedizione"
+  | "paese_vendita";
 
 export interface ValoriVendita {
   id: string;
@@ -113,9 +118,39 @@ export interface ValoriVendita {
   costoSpedizione: number | null;
   piattaformaVendita: string | null;
   destinazione: string | null;
+  /** Codice ISO paese UE. Coerente con `destinazione`: vedi `risolviPaeseVendita`. */
+  paeseVendita: string | null;
   spedizioniere: string | null;
   prodottoSponsorizzato: boolean;
   venditaPostOfferta: boolean;
+}
+
+const CODICI_PAESI_UE = new Set<string>(PAESI_UE.map((p) => p.codice));
+
+/**
+ * Deriva il paese di vendita dalla destinazione, invece di trattarli come due
+ * campi indipendenti: il CHECK `articoli_paese_destinazione_coerenti` non
+ * accetterebbe comunque una combinazione incoerente, quindi è la validazione
+ * a doverla escludere per prima, con un messaggio comprensibile invece
+ * dell'errore grezzo di Postgres.
+ *
+ *   destinazione 'Italia'  → sempre 'IT' (il client non decide il paese)
+ *   destinazione 'Estero'  → il paese scelto, o `null` se non ancora noto
+ *                            (legittimo: è esattamente la lacuna da colmare
+ *                            a mano, non un errore di input)
+ *   altro/assente          → `null`, nessun vincolo
+ */
+function risolviPaeseVendita(
+  destinazione: string | null,
+  paeseRaw: string | null
+): { paeseVendita: string | null; errore?: string } {
+  if (destinazione === "Italia") return { paeseVendita: "IT" };
+  if (destinazione === "Estero") {
+    if (!paeseRaw) return { paeseVendita: null };
+    if (paeseRaw !== "IT" && CODICI_PAESI_UE.has(paeseRaw)) return { paeseVendita: paeseRaw };
+    return { paeseVendita: null, errore: "Paese non valido." };
+  }
+  return { paeseVendita: null };
 }
 
 export function parseVendita(formData: FormData): Esito<ValoriVendita, CampoVendita> {
@@ -150,6 +185,13 @@ export function parseVendita(formData: FormData): Esito<ValoriVendita, CampoVend
   const spedizione = importoOpzionale(stringa(formData, "costo_spedizione"));
   if (spedizione === undefined) campi.costo_spedizione = "Costo di spedizione non valido.";
 
+  const destinazione = stringa(formData, "destinazione") || null;
+  const { paeseVendita, errore: erroreePaese } = risolviPaeseVendita(
+    destinazione,
+    stringa(formData, "paese_vendita") || null
+  );
+  if (erroreePaese) campi.paese_vendita = erroreePaese;
+
   if (Object.keys(campi).length > 0) {
     return { ok: false, campi, errore: "Controlla i campi evidenziati." };
   }
@@ -164,7 +206,8 @@ export function parseVendita(formData: FormData): Esito<ValoriVendita, CampoVend
       fee: fee as number | null,
       costoSpedizione: spedizione as number | null,
       piattaformaVendita: stringa(formData, "piattaforma_vendita") || null,
-      destinazione: stringa(formData, "destinazione") || null,
+      destinazione,
+      paeseVendita,
       spedizioniere: stringa(formData, "spedizioniere") || null,
       prodottoSponsorizzato: spuntata(formData, "prodotto_sponsorizzato"),
       venditaPostOfferta: spuntata(formData, "vendita_post_offerta"),

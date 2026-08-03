@@ -27,10 +27,15 @@ import {
 import { formatCurrency } from "@/lib/format";
 import {
   DESTINAZIONI,
+  PAESI_UE,
   PIATTAFORME_VENDITA,
   SPEDIZIONIERI,
   type Articolo,
 } from "@/types";
+
+// Il selettore paese esclude l'Italia: quando la destinazione è Italia il
+// paese è sempre 'IT' e lo impone il server, non c'è scelta da fare qui.
+const PAESI_ESTERI = PAESI_UE.filter((p) => p.codice !== "IT");
 import { registraVendita, type StatoVendita } from "./actions";
 
 function BottoneSalva({ modifica }: { modifica: boolean }) {
@@ -60,7 +65,12 @@ function CampiVendita({
   const [stato, setStato] = useState<string>(
     articolo.stato === "consegnato" ? "consegnato" : "venduto"
   );
-  const [destinazione, setDestinazione] = useState(articolo.destinazione ?? "");
+  // Italia preselezionata: il caso normale (90% delle vendite) non deve
+  // costare all'utente nemmeno un click. Se l'articolo ha già una
+  // destinazione registrata (modifica, o una delle vendite estere storiche)
+  // si parte da quella invece di sovrascriverla.
+  const [destinazione, setDestinazione] = useState(articolo.destinazione ?? "Italia");
+  const [paeseVendita, setPaeseVendita] = useState(articolo.paeseVendita ?? "");
 
   // Il foglio di calcolo ragionava in percentuale ("eBay 5%"), il database
   // memorizza un importo. Mostrare la percentuale implicita evita di dover
@@ -77,6 +87,11 @@ function CampiVendita({
       <input type="hidden" name="id" value={articolo.id} />
       <input type="hidden" name="stato" value={stato} />
       <input type="hidden" name="destinazione" value={destinazione} />
+      {/* Il paese viaggia solo quando la destinazione è Estero: per l'Italia
+          lo impone il server (sempre 'IT'), qui non c'è nulla da mandare. */}
+      {destinazione === "Estero" && (
+        <input type="hidden" name="paese_vendita" value={paeseVendita} />
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
@@ -189,7 +204,7 @@ function CampiVendita({
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="v-destinazione">Destinazione</Label>
-          <Select value={destinazione} onValueChange={(v) => setDestinazione(v ?? "")}>
+          <Select value={destinazione} onValueChange={(v) => setDestinazione(v ?? "Italia")}>
             <SelectTrigger id="v-destinazione" className="w-full">
               <SelectValue placeholder="—" />
             </SelectTrigger>
@@ -215,6 +230,36 @@ function CampiVendita({
           </Select>
         </div>
       </div>
+
+      {/* Il selettore paese compare solo per una vendita estera: per l'Italia
+          costerebbe un click in più al caso normale, che è il 90% delle
+          vendite. Lasciarlo non selezionato è legittimo (paese non ancora
+          noto) e non blocca il salvataggio: è esattamente la lacuna che poi
+          si corregge da /vendite-ue → /articoli. */}
+      {destinazione === "Estero" && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="v-paese">Paese UE</Label>
+          <Select value={paeseVendita} onValueChange={(v) => setPaeseVendita(v ?? "")}>
+            <SelectTrigger
+              id="v-paese"
+              className="w-full"
+              aria-invalid={Boolean(campi?.paese_vendita)}
+            >
+              <SelectValue placeholder="Non specificato — da correggere in seguito" />
+            </SelectTrigger>
+            <SelectContent>
+              {PAESI_ESTERI.map((p) => (
+                <SelectItem key={p.codice} value={p.codice}>
+                  {p.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {campi?.paese_vendita && (
+            <p className="text-xs text-destructive">{campi.paese_vendita}</p>
+          )}
+        </div>
+      )}
 
       <div className="mt-1 flex flex-col gap-2.5">
         <Label className="flex items-center gap-2 font-normal">

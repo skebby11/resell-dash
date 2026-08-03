@@ -1,6 +1,7 @@
 import { Archive, PiggyBank, ShoppingBag, Tag, TrendingUp, Wallet } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { ChartCard } from "@/components/dashboard/chart-card";
+import { FiltroPeriodo } from "@/components/dashboard/filtro-periodo";
 import { StatoVuoto } from "@/components/dashboard/stato-vuoto";
 import { VenditeMensiliChart } from "@/components/dashboard/charts/vendite-mensili-chart";
 import { DistribuzioneDonut } from "@/components/dashboard/charts/distribuzione-donut";
@@ -13,14 +14,31 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getDatiDashboard } from "@/lib/data/queries";
+import { risolviPeriodo } from "@/lib/data/periodo";
 import { formatCurrency } from "@/lib/format";
 
-export default async function DashboardPage() {
-  // Tutti i numeri arrivano già aggregati dalle viste Postgres: nessuna riga di
-  // articolo viene letta o sommata qui.
-  const { kpi, mensili, categoria, piattaforma, fonte, destinazione } = await getDatiDashboard();
+export default async function DashboardPage({
+  searchParams,
+}: {
+  // In Next.js 16 searchParams è asincrono.
+  searchParams: Promise<{ da?: string; a?: string }>;
+}) {
+  const params = await searchParams;
+  // Date non valide diventano "nessun limite" invece di un 500: un `?da=`
+  // rotto in un segnalibro non deve rompere la dashboard.
+  const periodo = risolviPeriodo(params.da, params.a);
+  const periodoAttivo = periodo.da != null || periodo.a != null;
 
-  const vuoto = kpi.numeroVendite === 0 && kpi.fondiImmobilizzati === 0;
+  // Tutti i numeri arrivano già aggregati da funzioni Postgres (via rpc):
+  // nessuna riga di articolo viene letta o sommata qui.
+  const { kpi, mensili, categoria, piattaforma, fonte, destinazione } = await getDatiDashboard(
+    periodo
+  );
+
+  // Il magazzino è davvero vuoto solo senza filtro periodo: con un periodo
+  // attivo, zero vendite significa "nessuna vendita in quell'intervallo", non
+  // "non hai ancora registrato nulla".
+  const vuoto = !periodoAttivo && kpi.numeroVendite === 0 && kpi.fondiImmobilizzati === 0;
   if (vuoto) {
     return (
       <StatoVuoto
@@ -33,6 +51,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <FiltroPeriodo periodo={periodo} />
+
       {/* KPI */}
       <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard label="N° Vendite" value={String(kpi.numeroVendite)} icon={ShoppingBag} />
@@ -52,7 +72,14 @@ export default async function DashboardPage() {
           label="Fondi Immobilizzati"
           value={formatCurrency(kpi.fondiImmobilizzati)}
           icon={Archive}
-          hint="scorta non ancora venduta"
+          // Fotografia dello stock non ancora venduto: col filtro periodo si
+          // basa sulla data di ACQUISTO (non ha senso su quella di vendita),
+          // quindi va detto esplicitamente cosa significa in quel caso.
+          hint={
+            periodoAttivo
+              ? "scorta acquistata nel periodo, non ancora venduta"
+              : "scorta non ancora venduta"
+          }
         />
         <KpiCard label="Capitale" value={formatCurrency(kpi.capitale)} icon={PiggyBank} />
       </section>

@@ -272,6 +272,7 @@ function generaArticoli(): Articolo[] {
       fee: null,
       costoSpedizione: null,
       destinazione: null,
+      paeseVendita: null,
       spedizioniere: null,
       note: null,
       prodottoSponsorizzato: false,
@@ -300,6 +301,9 @@ function generaArticoli(): Articolo[] {
       articolo.fee = fee;
       articolo.costoSpedizione = costoSpedizione;
       articolo.destinazione = destinazione;
+      // Coerente con l'invariante reale: il paese è noto solo per l'Italia,
+      // le vendite estere restano senza paese finché non lo si assegna a mano.
+      articolo.paeseVendita = destinazione === "Italia" ? "IT" : null;
       articolo.prodottoSponsorizzato = rand() < 0.15;
       articolo.venditaPostOfferta = rand() < 0.3;
       articolo.spedizioniere = pick(["BRT", "Poste Italiane", "GLS", "InPost"]);

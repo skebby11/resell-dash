@@ -8,7 +8,9 @@ import {
   type Kpi,
   type Prodotto,
   type StatoArticolo,
+  type SubtotaleVendite,
   type VenditaMensile,
+  type VenditaPerPaeseAnno,
 } from "@/types";
 import type { Tables } from "@/types/database";
 
@@ -98,7 +100,7 @@ async function eseguiPaginata<T>(
 const SELECT_ARTICOLI = `
   id, prodotto_id, data_acquisto, costo_acquisto, fonte_acquisto, stato,
   data_vendita, prezzo_vendita, piattaforma_vendita, fee, costo_spedizione,
-  destinazione, spedizioniere, prodotto_sponsorizzato, vendita_post_offerta,
+  destinazione, paese_vendita, spedizioniere, prodotto_sponsorizzato, vendita_post_offerta,
   profitto, note, created_at,
   prodotti!inner ( nome, categoria )
 `;
@@ -115,11 +117,14 @@ export const ARTICOLI_PER_PAGINA = 50;
 export async function getArticoliPaginati({
   stato,
   q,
+  senzaPaese,
   pagina = 1,
   perPagina = ARTICOLI_PER_PAGINA,
 }: {
   stato?: StatoArticolo;
   q?: string;
+  /** Isola le vendite senza paese noto (da /vendite-ue), per correggerle. */
+  senzaPaese?: boolean;
   pagina?: number;
   perPagina?: number;
 }): Promise<Pagina<Articolo>> {
@@ -127,7 +132,14 @@ export async function getArticoliPaginati({
 
   function base(select: string, opzioni: { count: "exact"; head?: boolean }) {
     let query = supabase.from("articoli").select(select, opzioni);
-    if (stato) query = query.eq("stato", stato);
+    if (senzaPaese) {
+      // Un articolo non ancora venduto non ha mai un paese: senza restringere
+      // anche lo stato, questo filtro mostrerebbe tutto il magazzino invenduto
+      // invece delle sole vendite da correggere.
+      query = query.in("stato", ["venduto", "consegnato"]).is("paese_vendita", null);
+    } else if (stato) {
+      query = query.eq("stato", stato);
+    }
     // Ricerca sul nome del prodotto collegato: possibile perché l'embed è !inner.
     if (q) query = query.ilike("prodotti.nome", `%${escapeLike(q)}%`);
     return query;
@@ -158,14 +170,21 @@ function num(v: number | string | null): number {
 }
 
 /**
- * Dati della dashboard, aggregati da Postgres.
+ * Dati della dashboard, aggregati da Postgres, in un intervallo di date
+ * facoltativo (`da`/`a` nulli = tutto lo storico, come le viste originarie).
  *
  * Non si leggono le righe per sommarle in memoria: PostgREST tronca a 1000 le
  * righe restituite da una select senza range, silenziosamente, e i KPI
- * risulterebbero sottostimati appena superata quella soglia. Le viste
- * restituiscono invece pochi record, indipendentemente dal volume.
+ * risulterebbero sottostimati appena superata quella soglia. Le funzioni SQL
+ * (`dashboard_kpi` e affini, invocate via `rpc`) restituiscono invece pochi
+ * record già aggregati, indipendentemente dal volume di articoli — ed è
+ * l'unico modo per accettare un parametro di periodo, dato che le viste non
+ * ne accettano.
  */
-export async function getDatiDashboard(): Promise<{
+export async function getDatiDashboard({
+  da,
+  a,
+}: { da?: string; a?: string } = {}): Promise<{
   kpi: Kpi;
   mensili: VenditaMensile[];
   categoria: DistribuzioneVoce[];
@@ -174,15 +193,16 @@ export async function getDatiDashboard(): Promise<{
   destinazione: DistribuzioneVoce[];
 }> {
   const supabase = await createClient();
+  const periodo = { p_da: da ?? null, p_a: a ?? null };
 
   // Query indipendenti: in parallelo il costo è quello della più lenta.
   const [kpiRes, mensiliRes, catRes, piatRes, fonteRes, destRes] = await Promise.all([
-    supabase.from("v_kpi").select("*").maybeSingle(),
-    supabase.from("v_vendite_mensili").select("*").order("mese", { ascending: true }),
-    supabase.from("v_distribuzione_categoria").select("*"),
-    supabase.from("v_distribuzione_piattaforma").select("*"),
-    supabase.from("v_distribuzione_fonte").select("*"),
-    supabase.from("v_distribuzione_destinazione").select("*"),
+    supabase.rpc("dashboard_kpi", periodo),
+    supabase.rpc("dashboard_vendite_mensili", periodo),
+    supabase.rpc("dashboard_distribuzione_categoria", periodo),
+    supabase.rpc("dashboard_distribuzione_piattaforma", periodo),
+    supabase.rpc("dashboard_distribuzione_fonte", periodo),
+    supabase.rpc("dashboard_distribuzione_destinazione", periodo),
   ]);
 
   for (const [nome, res] of [
@@ -196,9 +216,11 @@ export async function getDatiDashboard(): Promise<{
     if (res.error) erroreLettura(nome, res.error.message);
   }
 
-  const k = kpiRes.data;
-  // Database vuoto: la vista restituisce comunque una riga di zeri, ma se un
-  // giorno non lo facesse i KPI devono restare zero e non NaN.
+  // `rpc` su una funzione `returns table` dà sempre un array: dashboard_kpi
+  // aggrega senza GROUP BY, quindi restituisce sempre esattamente una riga.
+  const k = kpiRes.data?.[0];
+  // Database vuoto: la funzione restituisce comunque una riga di zeri, ma se
+  // un giorno non lo facesse i KPI devono restare zero e non NaN.
   const kpi: Kpi = {
     numeroVendite: num(k?.numero_vendite ?? 0),
     prezzoMedioVendita: num(k?.prezzo_medio_vendita ?? 0),
@@ -243,6 +265,104 @@ function etichettaMese(mese: string): string {
   const [anno, m] = mese.split("-").map(Number);
   const label = MESE_LABEL.format(new Date(Date.UTC(anno, m - 1, 1)));
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/**
+ * Vendite per paese UE e anno solare, per l'obbligo di legge di sapere quanto
+ * si è venduto in ciascun paese. Non è influenzata dal filtro periodo della
+ * dashboard: è per definizione uno storico per anno solare.
+ *
+ * `v_vendite_per_paese_anno` è già completamente aggregata (al più qualche
+ * decina di righe per anno): il subtotale "UE esclusa Italia" si ricalcola
+ * qui sulle righe già aggregate, non sulle righe grezze di `articoli` — non
+ * è la lettura senza range che PostgREST tronca a 1000, ma una somma su un
+ * risultato che lo è già.
+ *
+ * Il gruppo "senza paese" (paese null) arriva già sdoppiato per `destinazione`
+ * dalla vista (0012): qui si trasforma in due sottototali (Estero certo /
+ * destinazione ignota) e nell'intervallo minimo–massimo del venduto fuori
+ * Italia, così la pagina non deve mai mostrare un "Totale UE" a zero quando
+ * in realtà ci sono vendite estere non ancora attribuite a un paese.
+ */
+export async function getVenditePerPaeseAnno(): Promise<VenditaPerPaeseAnno[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("v_vendite_per_paese_anno")
+    .select("*")
+    .order("anno", { ascending: false });
+  if (error) erroreLettura("vendite per paese e anno", error.message);
+
+  type RigaVista = Tables<"v_vendite_per_paese_anno">;
+  const perAnno = new Map<number, RigaVista[]>();
+  for (const riga of data ?? []) {
+    if (riga.anno == null) continue;
+    const voci = perAnno.get(riga.anno) ?? [];
+    voci.push(riga);
+    perAnno.set(riga.anno, voci);
+  }
+
+  return [...perAnno.entries()]
+    .sort(([a], [b]) => b - a)
+    .map(([anno, voci]) => {
+      const righe = voci
+        .filter((r): r is RigaVista & { paese: string } => r.paese != null)
+        .map((r) => ({
+          paese: r.paese,
+          numeroVendite: num(r.numero_vendite),
+          totaleVendite: num(r.totale_vendite),
+          profittoTotale: num(r.profitto_totale),
+        }))
+        .sort((x, y) => y.totaleVendite - x.totaleVendite);
+
+      // Il gruppo "senza paese" (paese null) si sdoppia per destinazione: due
+      // lacune diverse, non una sola (0012_vendite_senza_paese_destinazione).
+      // 'Estero' = certamente fuori Italia, paese ignoto. NULL = non si sa
+      // nemmeno la destinazione.
+      const rigaEstero = voci.find((r) => r.paese == null && r.destinazione === "Estero");
+      const rigaIgnota = voci.find((r) => r.paese == null && r.destinazione == null);
+      const senzaPaeseEstero = {
+        paese: null,
+        numeroVendite: num(rigaEstero?.numero_vendite ?? 0),
+        totaleVendite: num(rigaEstero?.totale_vendite ?? 0),
+        profittoTotale: num(rigaEstero?.profitto_totale ?? 0),
+      };
+      const senzaPaeseIgnota = {
+        paese: null,
+        numeroVendite: num(rigaIgnota?.numero_vendite ?? 0),
+        totaleVendite: num(rigaIgnota?.totale_vendite ?? 0),
+        profittoTotale: num(rigaIgnota?.profitto_totale ?? 0),
+      };
+
+      const ue = righe.filter((r) => r.paese !== "IT");
+      const totaleUeEsclusaItalia = {
+        numeroVendite: ue.reduce((s, r) => s + r.numeroVendite, 0),
+        totaleVendite: Math.round(ue.reduce((s, r) => s + r.totaleVendite, 0) * 100) / 100,
+        profittoTotale: Math.round(ue.reduce((s, r) => s + r.profittoTotale, 0) * 100) / 100,
+      };
+
+      // Intervallo minimo certo — massimo possibile del venduto fuori Italia:
+      // il minimo aggiunge le vendite 'Estero' senza paese (certe, manca solo
+      // quale paese UE); il massimo aggiunge anche quelle a destinazione
+      // ignota (potrebbero esserlo, non si sa). Se non c'è alcuna lacuna,
+      // minimo e massimo coincidono e la UI lo mostra come un totale unico.
+      const somma = (a: SubtotaleVendite, b: SubtotaleVendite): SubtotaleVendite => ({
+        numeroVendite: a.numeroVendite + b.numeroVendite,
+        totaleVendite: Math.round((a.totaleVendite + b.totaleVendite) * 100) / 100,
+        profittoTotale: Math.round((a.profittoTotale + b.profittoTotale) * 100) / 100,
+      });
+      const minimo = somma(totaleUeEsclusaItalia, senzaPaeseEstero);
+      const massimo = somma(minimo, senzaPaeseIgnota);
+      const incompleto = senzaPaeseEstero.numeroVendite + senzaPaeseIgnota.numeroVendite > 0;
+
+      return {
+        anno,
+        righe,
+        senzaPaeseEstero,
+        senzaPaeseIgnota,
+        totaleUeEsclusaItalia,
+        totaleFuoriItalia: { minimo, massimo, incompleto },
+      };
+    });
 }
 
 export const PRODOTTI_PER_PAGINA = 48;
