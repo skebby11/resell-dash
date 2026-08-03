@@ -25,13 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/format";
-import {
-  DESTINAZIONI,
-  PAESI_UE,
-  PIATTAFORME_VENDITA,
-  SPEDIZIONIERI,
-  type Articolo,
-} from "@/types";
+import { DESTINAZIONI, PAESI_UE, type Articolo } from "@/types";
 
 // Il selettore paese esclude l'Italia: quando la destinazione è Italia il
 // paese è sempre 'IT' e lo impone il server, non c'è scelta da fare qui.
@@ -56,9 +50,14 @@ function numInput(v: number | null): string {
 function CampiVendita({
   articolo,
   campi,
+  piattaformeVendita,
+  spedizionieri,
 }: {
   articolo: Articolo;
   campi: StatoVendita["campi"];
+  /** Canali attivi letti dal database (0013_canali_configurabili), non più costanti. */
+  piattaformeVendita: string[];
+  spedizionieri: string[];
 }) {
   const [prezzo, setPrezzo] = useState(numInput(articolo.prezzoVendita));
   const [fee, setFee] = useState(numInput(articolo.fee));
@@ -179,7 +178,7 @@ function CampiVendita({
             placeholder="eBay, Vinted…"
           />
           <datalist id="lista-piattaforme">
-            {PIATTAFORME_VENDITA.map((p) => (
+            {piattaformeVendita.map((p) => (
               <option key={p} value={p} />
             ))}
           </datalist>
@@ -194,7 +193,7 @@ function CampiVendita({
             placeholder="BRT, InPost…"
           />
           <datalist id="lista-spedizionieri">
-            {SPEDIZIONIERI.map((s) => (
+            {spedizionieri.map((s) => (
               <option key={s} value={s} />
             ))}
           </datalist>
@@ -280,7 +279,15 @@ function CampiVendita({
   );
 }
 
-export function VenditaDialog({ articolo }: { articolo: Articolo }) {
+export function VenditaDialog({
+  articolo,
+  piattaformeVendita,
+  spedizionieri,
+}: {
+  articolo: Articolo;
+  piattaformeVendita: string[];
+  spedizionieri: string[];
+}) {
   const [stato, action] = useActionState<StatoVendita, FormData>(registraVendita, { seq: 0 });
   const modifica = articolo.stato === "venduto" || articolo.stato === "consegnato";
 
@@ -306,7 +313,12 @@ export function VenditaDialog({ articolo }: { articolo: Articolo }) {
           <DialogDescription>{articolo.prodottoNome}</DialogDescription>
         </DialogHeader>
         <form action={action} className="flex flex-col gap-4">
-          <CampiVendita articolo={articolo} campi={stato.campi} />
+          <CampiVendita
+            articolo={articolo}
+            campi={stato.campi}
+            piattaformeVendita={piattaformeVendita}
+            spedizionieri={spedizionieri}
+          />
           <DialogFooter>
             <BottoneSalva modifica={modifica} />
           </DialogFooter>

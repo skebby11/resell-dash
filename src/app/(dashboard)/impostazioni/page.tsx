@@ -1,6 +1,8 @@
 import { CheckCircle2, CircleDashed, Database, ScanBarcode, Sparkles, Gamepad2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getUtenteCorrente } from "@/lib/data/queries";
+import { getCanaliConConteggio, getUtenteCorrente } from "@/lib/data/queries";
+import { CanaliManager } from "@/components/dashboard/canali-manager";
+import { ETICHETTA_TIPO_CANALE, TIPI_CANALE } from "@/types";
 
 // La pagina è ora dietro il gate del layout: solo utenti in `utenti_autorizzati`
 // la raggiungono. Restiamo comunque prudenti sui segreti server-only: mostrare
@@ -56,7 +58,7 @@ function isConfigured(envVars: string[]): boolean {
 }
 
 export default async function ImpostazioniPage() {
-  const utente = await getUtenteCorrente();
+  const [utente, { canali, orfani }] = await Promise.all([getUtenteCorrente(), getCanaliConConteggio()]);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -137,6 +139,27 @@ export default async function ImpostazioniPage() {
               </div>
             );
           })}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <h2 className="font-display text-lg italic text-foreground">Canali</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Piattaforme di vendita, fonti di acquisto e spedizionieri suggeriti nei form. Restano campi
+          di testo libero: un valore non elencato qui resta comunque accettabile, e disattivare un
+          canale non tocca gli articoli che lo usano già.
+        </p>
+
+        <div className="mt-5 flex flex-col gap-6">
+          {TIPI_CANALE.map((tipo) => (
+            <CanaliManager
+              key={tipo}
+              tipo={tipo}
+              etichetta={ETICHETTA_TIPO_CANALE[tipo]}
+              canali={canali.filter((c) => c.tipo === tipo)}
+              orfani={orfani.filter((o) => o.tipo === tipo)}
+            />
+          ))}
         </div>
       </section>
     </div>

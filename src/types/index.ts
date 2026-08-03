@@ -3,9 +3,13 @@
 // libero (nessun enum), quindi i tipi di dominio più sotto usano `string` per
 // non mentire su cosa può realmente arrivare dal database.
 export const CATEGORIE = ["Videogiochi", "Console", "Controller", "Accessori"] as const;
-// Piattaforme, fonti e spedizionieri includono i valori realmente presenti nello
-// storico importato dal foglio: sono suggerimenti, non vincoli, perché le colonne
-// sono `text` libero e prima o poi comparirà un canale nuovo.
+// Piattaforme di vendita, fonti di acquisto e spedizionieri NON sono più letti
+// da qui dai form (0013_canali_configurabili): sono per-installazione, in
+// tabella `canali`, gestibili da Impostazioni. Queste tre liste sopravvivono
+// solo come (a) il seed della migration — devono restare identiche ai valori
+// inseriti lì, altrimenti l'installazione esistente cambierebbe suggerimenti —
+// e (b) valori di esempio per i dati mock (src/lib/mock-data.ts). Non sono più
+// l'unica fonte di verità: quella è il database.
 export const PIATTAFORME_VENDITA = [
   "eBay",
   "Vinted",
@@ -23,6 +27,32 @@ export const SPEDIZIONIERI = [
   "Scambio a mano",
 ] as const;
 export const DESTINAZIONI = ["Italia", "Estero"] as const;
+
+/**
+ * I tre tipi di canale configurabile (0013_canali_configurabili). Corrispondono
+ * 1:1 alle colonne `articoli.piattaforma_vendita/fonte_acquisto/spedizioniere`
+ * che ciascun tipo suggerisce.
+ */
+export const TIPI_CANALE = ["piattaforma_vendita", "fonte_acquisto", "spedizioniere"] as const;
+export type TipoCanale = (typeof TIPI_CANALE)[number];
+
+/** Etichetta in italiano di un tipo di canale, per titoli e messaggi in UI. */
+export const ETICHETTA_TIPO_CANALE: Record<TipoCanale, string> = {
+  piattaforma_vendita: "Piattaforma di vendita",
+  fonte_acquisto: "Fonte di acquisto",
+  spedizioniere: "Spedizioniere",
+};
+
+/** Un canale configurabile, con quanti articoli storici usano ancora il suo nome. */
+export interface Canale {
+  id: string;
+  tipo: TipoCanale;
+  nome: string;
+  attivo: boolean;
+  ordine: number;
+  /** Articoli la cui colonna corrispondente contiene esattamente `nome` (indipendentemente da questo canale essendo attivo o meno). */
+  conteggioArticoli: number;
+}
 
 /**
  * I 27 stati membri UE (codice ISO 3166-1 alpha-2 → nome italiano), verificati
