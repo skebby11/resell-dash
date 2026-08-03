@@ -42,7 +42,7 @@ function ChartTooltip({
 export function VenditeMensiliChart({ data }: { data: VenditaMensile[] }) {
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+      <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid vertical={false} stroke="var(--border)" />
         <XAxis
           dataKey="meseLabel"
@@ -55,7 +55,8 @@ export function VenditeMensiliChart({ data }: { data: VenditaMensile[] }) {
           tickLine={false}
           axisLine={false}
           tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-          width={28}
+          allowDecimals={false}
+          width={36}
         />
         <YAxis
           yAxisId="right"
@@ -64,7 +65,7 @@ export function VenditeMensiliChart({ data }: { data: VenditaMensile[] }) {
           axisLine={false}
           tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
           tickFormatter={(v: number) => formatCurrencyCompact(v)}
-          width={64}
+          width={68}
         />
         <Tooltip content={<ChartTooltip />} cursor={{ fill: "var(--muted)", opacity: 0.4 }} />
         <Bar

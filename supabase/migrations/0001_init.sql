@@ -1,7 +1,9 @@
 -- Schema iniziale: catalogo prodotti, articoli (esemplari acquistati/venduti),
 -- impostazioni chiave/valore e vista di aggregazione mensile delle vendite.
--- Nota: questo file non viene applicato automaticamente; serve solo da riferimento
--- per il futuro collegamento a un progetto Supabase.
+--
+-- Le policy RLS definite qui concedono accesso a qualsiasi utente autenticato:
+-- vengono sostituite da 0002_auth_allowlist.sql con policy che verificano
+-- l'email contro l'allowlist. Applicare le migration in ordine.
 
 create extension if not exists "pgcrypto";
 

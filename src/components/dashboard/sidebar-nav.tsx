@@ -21,7 +21,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             className={cn(
               "group relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
               active
-                ? "bg-primary text-primary-foreground shadow-sm"
+                ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
                 : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             )}
           >
@@ -34,7 +34,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             />
             <span>{item.label}</span>
             {active && (
-              <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
+              <span className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-primary" />
             )}
           </Link>
         );

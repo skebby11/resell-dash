@@ -4,11 +4,11 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MobileNav } from "./mobile-nav";
 import { NAV_ITEMS } from "./nav-items";
+import { UserMenu } from "./user-menu";
 
-export function Topbar() {
+export function Topbar({ email }: { email: string }) {
   const pathname = usePathname();
   const current = NAV_ITEMS.find((item) => item.href === pathname) ?? NAV_ITEMS[0];
 
@@ -17,7 +17,7 @@ export function Topbar() {
       <div className="flex items-center gap-3">
         <MobileNav />
         <div>
-          <h1 className="font-display text-xl italic tracking-tight text-foreground sm:text-2xl">
+          <h1 className="font-display text-xl font-bold italic tracking-tight text-foreground sm:text-2xl">
             {current.label}
           </h1>
           <p className="hidden text-xs text-muted-foreground sm:block">{current.description}</p>
@@ -43,11 +43,7 @@ export function Topbar() {
         >
           <PlusCircle className="size-4" />
         </Button>
-        <Avatar className="size-9 border border-border">
-          <AvatarFallback className="bg-accent text-accent-foreground font-display italic">
-            S
-          </AvatarFallback>
-        </Avatar>
+        <UserMenu email={email} />
       </div>
     </header>
   );

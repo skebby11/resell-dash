@@ -18,7 +18,10 @@ const badgeVariants = cva(
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
-        link: "text-primary underline-offset-4 hover:underline",
+        // text-accent-foreground, non text-primary: il giallo brand non è
+        // leggibile come colore di testo su fondo chiaro (--accent-foreground
+        // è il blu scuro/chiaro già verificato per il testo su sfondo normale).
+        link: "text-accent-foreground underline-offset-4 hover:underline",
       },
     },
     defaultVariants: {

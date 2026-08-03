@@ -1,11 +1,11 @@
 import { CheckCircle2, CircleDashed, Database, ScanBarcode, Sparkles, Gamepad2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getUtenteCorrente } from "@/lib/data/queries";
 
-// TODO(security): questa pagina è renderizzata lato server ma è raggiungibile da qualsiasi
-// utente anonimo (nessun gate di auth ancora). Non calcolare/esporre qui lo stato di readiness
-// di segreti server-only (service role key, API key varie): rivelerebbe a chiunque quali
-// credenziali sono configurate. Quando si aggiunge auth admin, spostare il check di quelle
-// capability dietro una route/server action protetta da sessione autenticata.
+// La pagina è ora dietro il gate del layout: solo utenti in `utenti_autorizzati`
+// la raggiungono. Restiamo comunque prudenti sui segreti server-only: mostrare
+// "configurato / non configurato" per le API key non aggiunge nulla di utile e
+// costruisce una mappa delle credenziali. Da rivedere solo se servirà davvero.
 
 interface Capability {
   nome: string;
@@ -13,7 +13,8 @@ interface Capability {
   icon: typeof Database;
   // "public": readiness calcolabile lato client dalle NEXT_PUBLIC_* (già esposte nel bundle).
   // "server": dipende da segreti server-only; niente stato booleano pubblico qui.
-  kind: "public" | "server";
+  // "planned": funzionalità in roadmap, non ancora implementata nel codice (vedi README).
+  kind: "public" | "server" | "planned";
   envVars?: string[];
 }
 
@@ -27,19 +28,24 @@ const CAPABILITIES: Capability[] = [
   },
   {
     nome: "Barcode",
-    descrizione: "UPCitemdb per riconoscere prodotti da codice a barre.",
+    // Nessun servizio esterno: il riconoscimento passa dal catalogo interno
+    // (prodotti.barcode); solo se il codice non è ancora noto si passa a IGDB (voce sotto).
+    descrizione: "Riconoscimento da codice a barre tramite il catalogo interno, senza servizi esterni.",
     icon: ScanBarcode,
-    kind: "server",
+    kind: "public",
+    envVars: [],
   },
   {
     nome: "Voce",
-    descrizione: "Trascrizione e assistente vocale (Groq + Anthropic).",
+    // Roadmap: nessuna route/codice di trascrizione esiste ancora (vedi README, sezione Roadmap).
+    // Non va mostrata come le altre integrazioni server-only, altrimenti sembra già attiva.
+    descrizione: "Trascrizione e assistente vocale (Groq + Anthropic) — non ancora implementata.",
     icon: Sparkles,
-    kind: "server",
+    kind: "planned",
   },
   {
     nome: "IGDB",
-    descrizione: "Metadati e copertine dei videogiochi (Twitch).",
+    descrizione: "Metadati e copertine dei videogiochi da barcode non ancora noto (credenziali Twitch).",
     icon: Gamepad2,
     kind: "server",
   },
@@ -49,16 +55,24 @@ function isConfigured(envVars: string[]): boolean {
   return envVars.every((v) => Boolean(process.env[v]));
 }
 
-export default function ImpostazioniPage() {
+export default async function ImpostazioniPage() {
+  const utente = await getUtenteCorrente();
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <section className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
         <h2 className="font-display text-lg italic text-foreground">Account</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Dashboard single-user. Le preferenze personali (valuta, lingua, timezone) arriveranno con
-          l&apos;integrazione Supabase.
+          Dashboard single-user, accesso su invito. Le email autorizzate si gestiscono nella tabella
+          <span className="font-mono-num"> utenti_autorizzati</span> su Supabase.
         </p>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Email</p>
+            <p className="mt-0.5 truncate text-sm font-medium text-foreground" title={utente?.email}>
+              {utente?.email ?? "—"}
+            </p>
+          </div>
           <div>
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valuta</p>
             <p className="mt-0.5 text-sm font-medium text-foreground">Euro (€)</p>
@@ -93,7 +107,12 @@ export default function ImpostazioniPage() {
                     <p className="text-xs text-muted-foreground">{cap.descrizione}</p>
                   </div>
                 </div>
-                {configured === null ? (
+                {cap.kind === "planned" ? (
+                  <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                    <CircleDashed className="size-3.5" strokeWidth={2.5} />
+                    Pianificata
+                  </span>
+                ) : configured === null ? (
                   <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-muted-foreground">
                     <CircleDashed className="size-3.5" strokeWidth={2.5} />
                     Configurazione server

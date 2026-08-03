@@ -16,10 +16,14 @@ export function MobileNav() {
         <Menu className="size-5" />
         <span className="sr-only">Apri menu</span>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 bg-sidebar p-4">
+      {/* text-sidebar-foreground: il pannello forza bg-sidebar (sempre blu
+          notte), ma il colore ambiente di SheetContent è pensato per il
+          popover chiaro. Senza l'override il pulsante di chiusura (che eredita
+          il colore, non lo imposta) risulterebbe scuro su scuro. */}
+      <SheetContent side="left" className="w-72 bg-sidebar text-sidebar-foreground p-4">
         <SheetHeader className="p-0 pb-4">
           <SheetTitle className="sr-only">Menu di navigazione</SheetTitle>
-          <Brand />
+          <Brand onDark />
         </SheetHeader>
         <SidebarNav onNavigate={() => setOpen(false)} />
       </SheetContent>

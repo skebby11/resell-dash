@@ -4,8 +4,10 @@ import type { StatoArticolo } from "@/types";
 
 const STATO_STYLE: Record<StatoArticolo, string> = {
   acquistato: "bg-secondary text-secondary-foreground border-transparent",
-  "in vendita": "bg-chart-3/15 text-[oklch(0.4_0.1_80)] border-chart-3/30",
-  venduto: "bg-primary/12 text-primary border-primary/25",
+  "in vendita": "bg-chart-3/15 text-accent-foreground border-chart-3/30",
+  // Il giallo del brand non è leggibile come testo: qui resta solo la
+  // superficie (wash), il testo è blu notte (--foreground).
+  venduto: "bg-primary/15 text-foreground border-primary/30",
   consegnato: "bg-accent text-accent-foreground border-transparent",
 };
 
