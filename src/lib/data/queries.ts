@@ -254,6 +254,9 @@ export async function getDatiDashboard({
           numeroVendite: num(r.numero_vendite),
           totaleVendite: num(r.totale_vendite),
           prezzoMedio: num(r.prezzo_medio_vendita),
+          costoMerci: num(r.costo_merci),
+          feeTotali: num(r.fee_totali),
+          spedizioneTotale: num(r.spedizione_totale),
           profitto: num(r.profitto_totale),
         };
       }),

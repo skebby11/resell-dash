@@ -215,6 +215,9 @@ export interface VenditaMensile {
   numeroVendite: number;
   totaleVendite: number;
   prezzoMedio: number;
+  costoMerci: number;
+  feeTotali: number;
+  spedizioneTotale: number;
   profitto: number;
 }
 

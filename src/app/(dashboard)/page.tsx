@@ -124,6 +124,9 @@ export default async function DashboardPage({
                   <TableHead className="text-right">Numero vendite</TableHead>
                   <TableHead className="text-right">Prezzo medio</TableHead>
                   <TableHead className="text-right">Totale vendite</TableHead>
+                  <TableHead className="text-right">Costo merce</TableHead>
+                  <TableHead className="text-right">Fee</TableHead>
+                  <TableHead className="text-right">Spedizione</TableHead>
                   <TableHead className="text-right">Profitto</TableHead>
                 </TableRow>
               </TableHeader>
@@ -137,6 +140,15 @@ export default async function DashboardPage({
                     </TableCell>
                     <TableCell className="text-right font-mono-num">
                       {formatCurrency(m.totaleVendite)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono-num">
+                      {formatCurrency(m.costoMerci)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono-num">
+                      {formatCurrency(m.feeTotali)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono-num">
+                      {formatCurrency(m.spedizioneTotale)}
                     </TableCell>
                     <TableCell
                       className={`text-right font-mono-num ${

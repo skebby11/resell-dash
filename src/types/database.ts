@@ -241,8 +241,11 @@ export type Database = {
           mese: string | null;
           numero_vendite: number | null;
           prezzo_medio_vendita: number | null;
-          profitto_totale: number | null;
           totale_vendite: number | null;
+          costo_merci: number | null;
+          fee_totali: number | null;
+          spedizione_totale: number | null;
+          profitto_totale: number | null;
         };
         Relationships: [];
       };
@@ -337,6 +340,9 @@ export type Database = {
           numero_vendite: number;
           prezzo_medio_vendita: number;
           totale_vendite: number;
+          costo_merci: number;
+          fee_totali: number;
+          spedizione_totale: number;
           profitto_totale: number;
         }[];
       };
