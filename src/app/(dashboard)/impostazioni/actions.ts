@@ -14,10 +14,11 @@ import { ETICHETTA_TIPO_CANALE, type TipoCanale } from "@/types";
 
 /**
  * Server action per la gestione dei canali configurabili
- * (0013_canali_configurabili) e dei paesi (0014_paesi_configurabili):
- * aggiunta, rinomina, attivazione/disattivazione, riordino. Validazione
- * autorevole in `src/lib/validazione.ts`; qui restano solo le operazioni
- * che richiedono il database (unicità, conteggio storico).
+ * (0013_canali_configurabili), dei paesi (0014_paesi_configurabili) e
+ * delle categorie (0015_categorie_configurabili): aggiunta, rinomina,
+ * attivazione/disattivazione, riordino. Validazione autorevole in
+ * `src/lib/validazione.ts`; qui restano solo le operazioni che richiedono
+ * il database (unicità, conteggio storico).
  */
 
 function rivalidaPagine() {
@@ -25,10 +26,12 @@ function rivalidaPagine() {
   // Le colonne di articoli non cambiano mai qui (tranne la rinomina con
   // "aggiorna storico"), ma i form leggono i canali attivi dal database: se
   // qualcuno tocca /inserimento o /articoli subito dopo una modifica deve
-  // vedere l'elenco aggiornato, non quello cache.
+  // vedere l'elenco aggiornato, non quello cache. Catalogo e inserimento
+  // dipendono anche dalle categorie (0015).
   revalidatePath("/inserimento");
   revalidatePath("/articoli");
   revalidatePath("/vendite-ue");
+  revalidatePath("/catalogo");
 }
 
 export interface StatoCanale {
@@ -376,4 +379,164 @@ export async function impostaPaeseOrigine(stato: StatoPaese, formData: FormData)
 
   rivalidaPagine();
   return { ok: true, seq: seq + 1 };
+}
+
+// -------------------------------------------------------------- categorie ----
+
+export interface StatoCategoria {
+  ok?: boolean;
+  errore?: string;
+  /** Il form si svuota rimontando con questa key come `seq`, come gli altri form dell'app. */
+  seq: number;
+}
+
+/** `%` e `_` sono wildcard per LIKE/ILIKE: senza escape un nome li contenesse aggiornerebbe troppe righe. */
+function escapeLike(q: string): string {
+  return q.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/** Aggiunge una categoria attiva, in coda all'ordine esistente. */
+export async function creaCategoria(
+  stato: StatoCategoria,
+  formData: FormData
+): Promise<StatoCategoria> {
+  const seq = stato.seq ?? 0;
+  const nome = parseNomeEtichetta(String(formData.get("nome") ?? ""));
+  if (!nome) return { seq, errore: "Indica un nome (max 60 caratteri)." };
+
+  const supabase = await createClient();
+  const { data: ultimo, error: eOrdine } = await supabase
+    .from("categorie")
+    .select("ordine")
+    .order("ordine", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (eOrdine) return { seq, errore: eOrdine.message };
+
+  const { error } = await supabase
+    .from("categorie")
+    .insert({ nome, ordine: (ultimo?.ordine ?? -1) + 1 });
+  if (error?.code === "23505") return { seq, errore: `"${nome}" esiste già: nessun duplicato creato.` };
+  if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
+
+  rivalidaPagine();
+  return { ok: true, seq: seq + 1 };
+}
+
+/**
+ * Rinomina una categoria e propaga sempre il nuovo nome sui prodotti che
+ * avevano il vecchio (confronto case-insensitive). A differenza dei canali
+ * non c'è un checkbox "aggiorna storico": la categoria *è* il campo prodotto,
+ * e lasciare orfani bloccherebbe per sempre l'eliminazione.
+ */
+export async function rinominaCategoria(
+  stato: StatoCategoria,
+  formData: FormData
+): Promise<StatoCategoria> {
+  const seq = stato.seq ?? 0;
+  const id = String(formData.get("id") ?? "");
+  if (!UUID_RE.test(id)) return { seq, errore: "Categoria non valida." };
+  const nome = parseNomeEtichetta(String(formData.get("nome") ?? ""));
+  if (!nome) return { seq, errore: "Indica un nome (max 60 caratteri)." };
+
+  const supabase = await createClient();
+  const { data: attuale, error: eLettura } = await supabase
+    .from("categorie")
+    .select("nome")
+    .eq("id", id)
+    .maybeSingle();
+  if (eLettura) return { seq, errore: eLettura.message };
+  if (!attuale) return { seq, errore: "Categoria non trovata." };
+  const vecchioNome = attuale.nome;
+
+  const { error } = await supabase.from("categorie").update({ nome }).eq("id", id);
+  if (error?.code === "23505") return { seq, errore: `"${nome}" esiste già: nessun duplicato creato.` };
+  if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
+
+  if (vecchioNome !== nome) {
+    const { error: eProdotti } = await supabase
+      .from("prodotti")
+      .update({ categoria: nome })
+      .ilike("categoria", escapeLike(vecchioNome));
+    if (eProdotti) {
+      return {
+        seq,
+        errore: `Categoria rinominata, ma l'aggiornamento dei prodotti non è riuscito: ${eProdotti.message}`,
+      };
+    }
+  }
+
+  rivalidaPagine();
+  return { ok: true, seq: seq + 1 };
+}
+
+/** Attiva/disattiva una categoria. Disattivare non tocca `prodotti`. */
+export async function impostaAttivoCategoria(id: string, attivo: boolean): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Categoria non valida.");
+  const supabase = await createClient();
+  const { error } = await supabase.from("categorie").update({ attivo }).eq("id", id);
+  if (error) throw new Error(error.message);
+  rivalidaPagine();
+}
+
+/**
+ * Scambia l'ordine con il vicino immediato nella direzione data.
+ * Uno scambio a due, non un riordino dell'intera lista.
+ */
+export async function spostaCategoria(id: string, direzione: "su" | "giu"): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Categoria non valida.");
+  const supabase = await createClient();
+
+  const { data: riga, error } = await supabase
+    .from("categorie")
+    .select("id, ordine")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!riga) throw new Error("Categoria non trovata.");
+
+  const vicinoQuery = supabase.from("categorie").select("id, ordine");
+  const { data: vicino, error: eVicino } =
+    direzione === "su"
+      ? await vicinoQuery.lt("ordine", riga.ordine).order("ordine", { ascending: false }).limit(1).maybeSingle()
+      : await vicinoQuery.gt("ordine", riga.ordine).order("ordine", { ascending: true }).limit(1).maybeSingle();
+  if (eVicino) throw new Error(eVicino.message);
+  if (!vicino) return;
+
+  const { error: e1 } = await supabase.from("categorie").update({ ordine: vicino.ordine }).eq("id", riga.id);
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await supabase.from("categorie").update({ ordine: riga.ordine }).eq("id", vicino.id);
+  if (e2) throw new Error(e2.message);
+
+  rivalidaPagine();
+}
+
+export async function eliminaCategoria(id: string): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Categoria non valida.");
+  const supabase = await createClient();
+
+  const { data: riga, error: eLettura } = await supabase
+    .from("categorie")
+    .select("id, nome")
+    .eq("id", id)
+    .maybeSingle();
+  if (eLettura) throw new Error(eLettura.message);
+  if (!riga) throw new Error("Categoria non trovata.");
+
+  const { data: conteggi, error: eCount } = await supabase
+    .from("v_conteggio_categorie")
+    .select("nome, conteggio");
+  if (eCount) throw new Error(eCount.message);
+  const n = (conteggi ?? [])
+    .filter((r) => r.nome != null && r.nome.toLowerCase() === riga.nome.toLowerCase())
+    .reduce((s, r) => s + (r.conteggio ?? 0), 0);
+  if (n > 0) {
+    throw new Error(
+      `Riassegna o svuota la categoria sui ${n} modell${n === 1 ? "o" : "i"} prima di eliminarla.`
+    );
+  }
+
+  const { error } = await supabase.from("categorie").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  rivalidaPagine();
 }

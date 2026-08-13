@@ -1,7 +1,13 @@
-// Le liste sottostanti sono i valori *noti*, usati per popolare i form e le
-// legende. Non sono vincoli: le colonne corrispondenti su Postgres sono `text`
-// libero (nessun enum), quindi i tipi di dominio più sotto usano `string` per
-// non mentire su cosa può realmente arrivare dal database.
+// Le liste sottostanti sono i valori *noti* (seed e mock). Non sono vincoli:
+// le colonne corrispondenti su Postgres sono `text` libero (nessun enum),
+// quindi i tipi di dominio più sotto usano `string` per non mentire su cosa
+// può realmente arrivare dal database.
+//
+// Categorie NON sono più lette da qui dai form (0015_categorie_configurabili):
+// sono per-installazione, in tabella `categorie`, gestibili da Impostazioni.
+// Questa lista sopravvive solo come (a) il seed della migration — deve restare
+// identica ai valori inseriti lì — e (b) valori di esempio per i dati mock
+// (src/lib/mock-data.ts).
 export const CATEGORIE = ["Videogiochi", "Console", "Controller", "Accessori"] as const;
 // Piattaforme di vendita, fonti di acquisto e spedizionieri NON sono più letti
 // da qui dai form (0013_canali_configurabili): sono per-installazione, in
@@ -63,6 +69,16 @@ export interface Paese {
   ordine: number;
   /** Articoli con `paese_vendita` uguale a `codice` (indipendentemente da questo paese essendo attivo o meno). */
   conteggioArticoli: number;
+}
+
+/** Una categoria prodotto configurabile, con quanti modelli usano ancora il suo nome. */
+export interface Categoria {
+  id: string;
+  nome: string;
+  attivo: boolean;
+  ordine: number;
+  /** Prodotti la cui `categoria` corrisponde a `nome` (indipendentemente da questa riga essendo attiva o meno). */
+  conteggioProdotti: number;
 }
 
 /**
@@ -131,7 +147,6 @@ export const PIATTAFORME_GIOCO = [
   "PC",
 ] as const;
 
-export type Categoria = (typeof CATEGORIE)[number];
 export type PiattaformaVendita = (typeof PIATTAFORME_VENDITA)[number];
 export type FonteAcquisto = (typeof FONTI_ACQUISTO)[number];
 export type Spedizioniere = (typeof SPEDIZIONIERI)[number];

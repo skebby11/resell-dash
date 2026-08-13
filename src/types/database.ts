@@ -127,6 +127,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      // Categorie prodotto configurabili (0015_categorie_configurabili):
+      // `prodotti.categoria` resta testo libero, questa tabella è il
+      // catalogo dei suggerimenti gestibili da Impostazioni.
+      categorie: {
+        Row: {
+          attivo: boolean;
+          created_at: string;
+          id: string;
+          nome: string;
+          ordine: number;
+        };
+        Insert: {
+          attivo?: boolean;
+          created_at?: string;
+          id?: string;
+          nome: string;
+          ordine?: number;
+        };
+        Update: {
+          attivo?: boolean;
+          created_at?: string;
+          id?: string;
+          nome?: string;
+          ordine?: number;
+        };
+        Relationships: [];
+      };
       impostazioni: {
         Row: { chiave: string; created_at: string; id: string; valore: Json | null };
         Insert: { chiave: string; created_at?: string; id?: string; valore?: Json | null };
@@ -241,6 +268,12 @@ export type Database = {
       // della pagina Impostazioni, prima di cancellare o disattivare un paese.
       v_conteggio_paesi: {
         Row: { codice: string | null; conteggio: number | null };
+        Relationships: [];
+      };
+      // Conteggio prodotti per stringa categoria (0015): a supporto della
+      // pagina Impostazioni, prima di cancellare o disattivare una categoria.
+      v_conteggio_categorie: {
+        Row: { conteggio: number | null; nome: string | null };
         Relationships: [];
       };
       v_distribuzione_categoria: {

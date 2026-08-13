@@ -7,6 +7,7 @@ import {
   TIPI_CANALE,
   type Articolo,
   type Canale,
+  type Categoria,
   type DistribuzioneVoce,
   type Kpi,
   type Paese,
@@ -601,6 +602,57 @@ export async function getPaesi(): Promise<Paese[]> {
  */
 export async function getPaesiAttivi(): Promise<Paese[]> {
   return leggiPaesi(true);
+}
+
+/**
+ * Nomi delle categorie attive, in ordine di preferenza, per popolare il
+ * `datalist` del form di inserimento (0015_categorie_configurabili). Solo
+ * attive: una categoria disattivata non deve più comparire come suggerimento,
+ * pur restando leggibile sui prodotti che già la usano.
+ */
+export async function getCategorieAttive(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("categorie")
+    .select("nome")
+    .eq("attivo", true)
+    .order("ordine", { ascending: true })
+    .order("nome", { ascending: true });
+  if (error) erroreLettura("categorie", error.message);
+  return (data ?? []).map((r) => r.nome);
+}
+
+/**
+ * Tutte le categorie configurate (attive e disattivate), con quanti prodotti
+ * usano ancora quel nome — a supporto della pagina Impostazioni, per capire
+ * cosa si sta disattivando o cancellando.
+ */
+export async function getCategorieConConteggio(): Promise<Categoria[]> {
+  const supabase = await createClient();
+  const [categorieRes, conteggiRes] = await Promise.all([
+    supabase.from("categorie").select("*").order("ordine").order("nome"),
+    supabase.from("v_conteggio_categorie").select("*"),
+  ]);
+  if (categorieRes.error) erroreLettura("categorie", categorieRes.error.message);
+  if (conteggiRes.error) erroreLettura("conteggio categorie", conteggiRes.error.message);
+
+  // Chiave case-insensitive: coerente con l'unicità imposta da
+  // `ux_categorie_nome`, che tratta "Videogiochi" e "videogiochi" come la
+  // stessa categoria. Somma le varianti di grafia sullo stesso nome.
+  const conteggi = new Map<string, number>();
+  for (const r of conteggiRes.data ?? []) {
+    if (r.nome == null) continue;
+    const k = r.nome.toLowerCase();
+    conteggi.set(k, (conteggi.get(k) ?? 0) + (r.conteggio ?? 0));
+  }
+
+  return (categorieRes.data ?? []).map((r) => ({
+    id: r.id,
+    nome: r.nome,
+    attivo: r.attivo,
+    ordine: r.ordine,
+    conteggioProdotti: conteggi.get(r.nome.toLowerCase()) ?? 0,
+  }));
 }
 
 /**

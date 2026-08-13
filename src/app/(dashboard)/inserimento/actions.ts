@@ -161,6 +161,27 @@ export async function creaArticolo(
 
   if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
 
+  // Una categoria digitata (anche su un prodotto già esistente) va in
+  // `categorie` così compare in Impostazioni alla visita successiva.
+  // 23505 = già presente (unicità case-insensitive): si ignora.
+  if (categoria) {
+    const { data: ultimo } = await supabase
+      .from("categorie")
+      .select("ordine")
+      .order("ordine", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { error: eCategoria } = await supabase.from("categorie").insert({
+      nome: categoria,
+      ordine: (ultimo?.ordine ?? -1) + 1,
+    });
+    if (eCategoria && eCategoria.code !== "23505") {
+      avviso = avviso
+        ? `${avviso} Categoria non aggiunta all'elenco: ${eCategoria.message}`
+        : `Articolo salvato, ma la categoria non è stata aggiunta all'elenco: ${eCategoria.message}`;
+    }
+  }
+
   // Le pagine che leggono articoli vanno rigenerate, altrimenti mostrano ancora
   // il render precedente alla scrittura.
   revalidatePath("/");
