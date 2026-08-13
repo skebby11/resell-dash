@@ -18,6 +18,7 @@ export type Database = {
     Tables: {
       articoli: {
         Row: {
+          archiviato_at: string | null;
           costo_acquisto: number;
           costo_spedizione: number | null;
           created_at: string;
@@ -39,6 +40,7 @@ export type Database = {
           vendita_post_offerta: boolean;
         };
         Insert: {
+          archiviato_at?: string | null;
           costo_acquisto: number;
           costo_spedizione?: number | null;
           created_at?: string;
@@ -60,6 +62,7 @@ export type Database = {
           vendita_post_offerta?: boolean;
         };
         Update: {
+          archiviato_at?: string | null;
           costo_acquisto?: number;
           costo_spedizione?: number | null;
           created_at?: string;

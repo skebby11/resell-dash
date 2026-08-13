@@ -107,7 +107,7 @@ const SELECT_ARTICOLI = `
   id, prodotto_id, data_acquisto, costo_acquisto, fonte_acquisto, stato,
   data_vendita, prezzo_vendita, piattaforma_vendita, fee, costo_spedizione,
   destinazione, paese_vendita, spedizioniere, prodotto_sponsorizzato, vendita_post_offerta,
-  profitto, note, created_at,
+  profitto, note, archiviato_at, created_at,
   prodotti!inner ( nome, categoria )
 `;
 
@@ -126,6 +126,7 @@ export async function getArticoliPaginati({
   stato,
   q,
   senzaPaese,
+  archivio = "attivi",
   daVendita,
   aVendita,
   pagina = 1,
@@ -135,6 +136,11 @@ export async function getArticoliPaginati({
   q?: string;
   /** Isola le vendite senza paese noto (da /vendite-ue), per correggerle. */
   senzaPaese?: boolean;
+  /**
+   * attivi (default): lista Articoli. archivio: solo nascosti.
+   * tutti: KPI / mese / Vendite UE — gli archiviati restano nei totali.
+   */
+  archivio?: "attivi" | "archivio" | "tutti";
   /**
    * Intervallo su `data_vendita` (ISO). Non chiamarli `da`/`a`: quelli sono
    * gli offset di `eseguiPaginata` e maschererebbero il filtro data.
@@ -162,6 +168,8 @@ export async function getArticoliPaginati({
     if (perDataVendita) query = query.in("stato", ["venduto", "consegnato"]);
     if (daVendita) query = query.gte("data_vendita", daVendita);
     if (aVendita) query = query.lte("data_vendita", aVendita);
+    if (archivio === "archivio") query = query.not("archiviato_at", "is", null);
+    else if (archivio === "attivi") query = query.is("archiviato_at", null);
     // Ricerca sul nome del prodotto collegato: possibile perché l'embed è !inner.
     if (q) query = query.ilike("prodotti.nome", `%${escapeLike(q)}%`);
     return query;

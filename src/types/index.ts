@@ -202,6 +202,9 @@ export interface Articolo {
   /** Note sul singolo esemplare: stato estetico, accessori, difetti. */
   note: string | null;
 
+  /** Non null = nascosto dalla lista Articoli di default. Resta in KPI e Vendite UE. */
+  archiviatoAt: string | null;
+
   prodottoSponsorizzato: boolean;
   venditaPostOfferta: boolean;
 

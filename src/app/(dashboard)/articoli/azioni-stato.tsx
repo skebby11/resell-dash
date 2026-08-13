@@ -12,7 +12,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Articolo, StatoArticolo } from "@/types";
-import { annullaVendita, cambiaStato } from "./actions";
+import { puoArchiviareArticolo, puoEliminareArticolo } from "@/lib/validazione";
+import { annullaVendita, archiviaArticolo, cambiaStato, eliminaArticolo, ripristinaArticolo } from "./actions";
 
 /** Transizioni che non richiedono dati aggiuntivi, per stato di partenza. */
 const TRANSIZIONI: Partial<Record<StatoArticolo, { stato: StatoArticolo; label: string }[]>> = {
@@ -27,8 +28,13 @@ export function AzioniStato({ articolo }: { articolo: Articolo }) {
   // Le server action invocate fuori da un <form> vanno avvolte in una
   // transition, altrimenti il redirect/revalidate non viene applicato.
   const [confermaAnnulla, setConfermaAnnulla] = useState(false);
+  const [confermaElimina, setConfermaElimina] = useState(false);
   const transizioni = TRANSIZIONI[articolo.stato] ?? [];
   const venduto = articolo.stato === "venduto" || articolo.stato === "consegnato";
+  const archiviato = articolo.archiviatoAt != null;
+  const mostraElimina = puoEliminareArticolo(articolo.stato);
+  const mostraArchivia = puoArchiviareArticolo(articolo.stato, archiviato);
+  const mostraRipristina = venduto && archiviato;
 
   function esegui(azione: () => Promise<void>, successo: string) {
     startTransition(async () => {
@@ -42,7 +48,14 @@ export function AzioniStato({ articolo }: { articolo: Articolo }) {
   }
 
   return (
-    <DropdownMenu onOpenChange={(aperto) => !aperto && setConfermaAnnulla(false)}>
+    <DropdownMenu
+      onOpenChange={(aperto) => {
+        if (!aperto) {
+          setConfermaAnnulla(false);
+          setConfermaElimina(false);
+        }
+      }}
+    >
       <DropdownMenuTrigger
         render={<Button variant="ghost" size="icon-sm" disabled={inCorso} />}
         aria-label={`Azioni per ${articolo.prodottoNome}`}
@@ -76,6 +89,47 @@ export function AzioniStato({ articolo }: { articolo: Articolo }) {
               }}
             >
               {confermaAnnulla ? "Confermi? Cancella i dati di vendita" : "Annulla vendita"}
+            </DropdownMenuItem>
+          </>
+        )}
+
+        {mostraElimina && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              closeOnClick={confermaElimina}
+              onClick={() => {
+                if (!confermaElimina) {
+                  setConfermaElimina(true);
+                  return;
+                }
+                esegui(() => eliminaArticolo(articolo.id), "Articolo eliminato");
+              }}
+            >
+              {confermaElimina ? "Confermi? Elimina dall'inventario" : "Elimina"}
+            </DropdownMenuItem>
+          </>
+        )}
+
+        {mostraArchivia && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => esegui(() => archiviaArticolo(articolo.id), "Articolo archiviato")}
+            >
+              Archivia
+            </DropdownMenuItem>
+          </>
+        )}
+
+        {mostraRipristina && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => esegui(() => ripristinaArticolo(articolo.id), "Articolo ripristinato")}
+            >
+              Ripristina
             </DropdownMenuItem>
           </>
         )}

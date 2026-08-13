@@ -18,6 +18,7 @@ export async function caricaVenditeMese(
   return getArticoliPaginati({
     daVendita: clip.da,
     aVendita: clip.a,
+    archivio: "tutti",
     pagina: normalizzaPagina(String(pagina)),
   });
 }
