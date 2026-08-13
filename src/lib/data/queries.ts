@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { toArticolo, toProdotto, type RigaArticoloConProdotto } from "./mappers";
+import type { ContestoPaese } from "@/lib/validazione";
 import {
   STATI_ARTICOLO,
   TIPI_CANALE,
@@ -8,6 +9,7 @@ import {
   type Canale,
   type DistribuzioneVoce,
   type Kpi,
+  type Paese,
   type Prodotto,
   type StatoArticolo,
   type SubtotaleVendite,
@@ -512,6 +514,92 @@ export async function getCanaliConConteggio(): Promise<{
     .map((r) => ({ tipo: r.tipo, nome: r.nome, conteggioArticoli: r.conteggio ?? 0 }));
 
   return { canali, orfani };
+}
+
+/**
+ * Codice ISO del paese di origine dell'installazione
+ * (`impostazioni.paese_origine`). Default `IT` se la chiave manca o il
+ * valore non è un codice a due lettere: `valore` è jsonb e supabase-js
+ * di solito restituisce già la stringa parsata (`"IT"`).
+ */
+export async function getPaeseOrigine(): Promise<string> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("impostazioni")
+    .select("valore")
+    .eq("chiave", "paese_origine")
+    .maybeSingle();
+  if (error) erroreLettura("paese origine", error.message);
+  const v = data?.valore;
+  return typeof v === "string" && /^[A-Z]{2}$/.test(v) ? v : "IT";
+}
+
+function mappaPaesi(
+  righe: Tables<"paesi">[],
+  conteggi: Map<string, number>
+): Paese[] {
+  return righe.map((r) => ({
+    codice: r.codice,
+    nome: r.nome,
+    ue: r.ue,
+    attivo: r.attivo,
+    ordine: r.ordine,
+    conteggioArticoli: conteggi.get(r.codice) ?? 0,
+  }));
+}
+
+async function leggiPaesi(soloAttivi: boolean): Promise<Paese[]> {
+  const supabase = await createClient();
+  const paesiQuery = supabase
+    .from("paesi")
+    .select("*")
+    .order("ordine", { ascending: true })
+    .order("nome", { ascending: true });
+  const [paesiRes, conteggiRes] = await Promise.all([
+    soloAttivi ? paesiQuery.eq("attivo", true) : paesiQuery,
+    supabase.from("v_conteggio_paesi").select("*"),
+  ]);
+  if (paesiRes.error) erroreLettura("paesi", paesiRes.error.message);
+  if (conteggiRes.error) erroreLettura("conteggio paesi", conteggiRes.error.message);
+
+  const conteggi = new Map<string, number>();
+  for (const r of conteggiRes.data ?? []) {
+    if (r.codice == null) continue;
+    conteggi.set(r.codice, r.conteggio ?? 0);
+  }
+
+  return mappaPaesi(paesiRes.data ?? [], conteggi);
+}
+
+/**
+ * Tutti i paesi configurati (attivi e disattivati), con quanti articoli
+ * storici usano ancora esattamente quel codice — a supporto della pagina
+ * Impostazioni, per capire cosa si sta disattivando o cancellando.
+ */
+export async function getPaesi(): Promise<Paese[]> {
+  return leggiPaesi(false);
+}
+
+/**
+ * Paesi attivi, in ordine, per popolare i selettori dei form di vendita.
+ * Un paese disattivato non deve più comparire come scelta, pur restando
+ * leggibile nello storico che già lo usa.
+ */
+export async function getPaesiAttivi(): Promise<Paese[]> {
+  return leggiPaesi(true);
+}
+
+/**
+ * Paese di origine e insieme dei codici ammessi, per la validazione in
+ * scrittura (`parseVendita`). Include anche i disattivati: una vendita
+ * storica con un codice non più proposto deve restare modificabile.
+ */
+export async function getContestoPaese(): Promise<ContestoPaese> {
+  const [origine, paesi] = await Promise.all([getPaeseOrigine(), getPaesi()]);
+  return {
+    paeseOrigine: origine,
+    codiciAmmessi: new Set(paesi.map((p) => p.codice)),
+  };
 }
 
 /** Stato valido a partire da un parametro di query non fidato. */

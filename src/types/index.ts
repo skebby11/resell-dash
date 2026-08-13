@@ -180,7 +180,7 @@ export interface Articolo {
   fee: number | null;
   costoSpedizione: number | null;
   destinazione: string | null;
-  /** Codice ISO paese UE, noto solo se inserito al momento della vendita. NULL = paese ignoto. */
+  /** Codice ISO paese, noto solo se inserito al momento della vendita. NULL = paese ignoto. */
   paeseVendita: string | null;
   spedizioniere: string | null;
 
