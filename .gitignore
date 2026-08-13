@@ -50,6 +50,9 @@ next-env.d.ts
 # PromptOps session assets
 .promptops-assets/
 
+# git worktrees (isolated feature workspaces)
+.worktrees/
+
 # agent skills (installed via `npx skills add`)
 .agents/
 .claude/skills/
