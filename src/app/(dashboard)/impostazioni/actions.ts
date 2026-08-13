@@ -32,6 +32,9 @@ function rivalidaPagine() {
   revalidatePath("/articoli");
   revalidatePath("/vendite-ue");
   revalidatePath("/catalogo");
+  // Rinomina categoria aggiorna `prodotti.categoria`: il donut della
+  // dashboard deve seguire il nuovo nome, non restare sulla fetta vecchia.
+  revalidatePath("/");
 }
 
 export interface StatoCanale {
@@ -390,11 +393,6 @@ export interface StatoCategoria {
   seq: number;
 }
 
-/** `%` e `_` sono wildcard per LIKE/ILIKE: senza escape un nome li contenesse aggiornerebbe troppe righe. */
-function escapeLike(q: string): string {
-  return q.replace(/[\\%_]/g, (c) => `\\${c}`);
-}
-
 /** Aggiunge una categoria attiva, in coda all'ordine esistente. */
 export async function creaCategoria(
   stato: StatoCategoria,
@@ -454,20 +452,65 @@ export async function rinominaCategoria(
   if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
 
   if (vecchioNome !== nome) {
-    const { error: eProdotti } = await supabase
-      .from("prodotti")
-      .update({ categoria: nome })
-      .ilike("categoria", escapeLike(vecchioNome));
-    if (eProdotti) {
+    const { ids, error: eIds } = await idsProdottiConCategoria(supabase, vecchioNome);
+    const fallimento = eIds ?? (await aggiornaCategoriaProdotti(supabase, ids, nome));
+    if (fallimento) {
+      const { error: eRevert } = await supabase
+        .from("categorie")
+        .update({ nome: vecchioNome })
+        .eq("id", id);
       return {
         seq,
-        errore: `Categoria rinominata, ma l'aggiornamento dei prodotti non è riuscito: ${eProdotti.message}`,
+        errore: eRevert
+          ? `Aggiornamento dei prodotti non riuscito (${fallimento}) e rollback della rinomina non riuscito: ${eRevert.message}`
+          : `L'aggiornamento dei prodotti non è riuscito: ${fallimento}`,
       };
     }
   }
 
   rivalidaPagine();
   return { ok: true, seq: seq + 1 };
+}
+
+/** PostgREST tronca a 1000: si pagina e si filtra in JS (uguaglianza case-insensitive, non ILIKE). */
+async function idsProdottiConCategoria(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  nome: string
+): Promise<{ ids: string[]; error?: string }> {
+  const ids: string[] = [];
+  const perPagina = 1000;
+  const cercato = nome.toLowerCase();
+  for (let da = 0; ; da += perPagina) {
+    const { data, error } = await supabase
+      .from("prodotti")
+      .select("id, categoria")
+      .not("categoria", "is", null)
+      .order("id", { ascending: true })
+      .range(da, da + perPagina - 1);
+    if (error) return { ids, error: error.message };
+    const righe = data ?? [];
+    for (const r of righe) {
+      if (r.categoria != null && r.categoria.toLowerCase() === cercato) ids.push(r.id);
+    }
+    if (righe.length < perPagina) break;
+  }
+  return { ids };
+}
+
+async function aggiornaCategoriaProdotti(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids: string[],
+  nome: string
+): Promise<string | undefined> {
+  const blocco = 100;
+  for (let i = 0; i < ids.length; i += blocco) {
+    const { error } = await supabase
+      .from("prodotti")
+      .update({ categoria: nome })
+      .in("id", ids.slice(i, i + blocco));
+    if (error) return error.message;
+  }
+  return undefined;
 }
 
 /** Attiva/disattiva una categoria. Disattivare non tocca `prodotti`. */
@@ -529,7 +572,7 @@ export async function eliminaCategoria(id: string): Promise<void> {
   if (eCount) throw new Error(eCount.message);
   const n = (conteggi ?? [])
     .filter((r) => r.nome != null && r.nome.toLowerCase() === riga.nome.toLowerCase())
-    .reduce((s, r) => s + (r.conteggio ?? 0), 0);
+    .reduce((s, r) => s + Number(r.conteggio ?? 0), 0);
   if (n > 0) {
     throw new Error(
       `Riassegna o svuota la categoria sui ${n} modell${n === 1 ? "o" : "i"} prima di eliminarla.`

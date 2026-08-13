@@ -643,7 +643,7 @@ export async function getCategorieConConteggio(): Promise<Categoria[]> {
   for (const r of conteggiRes.data ?? []) {
     if (r.nome == null) continue;
     const k = r.nome.toLowerCase();
-    conteggi.set(k, (conteggi.get(k) ?? 0) + (r.conteggio ?? 0));
+    conteggi.set(k, (conteggi.get(k) ?? 0) + Number(r.conteggio ?? 0));
   }
 
   return (categorieRes.data ?? []).map((r) => ({
