@@ -4,51 +4,84 @@
 -- impedisce), l'ordinamento ricadeva sul tie-break per nome, e uno spostamento
 -- successivo poteva saltare una riga.
 --
--- Le funzioni sotto fanno lo scambio in una sola istruzione SQL: i nuovi
--- valori sono letti dalla stessa riga sorgente prima che l'UPDATE tocchi
--- qualunque riga, quindi l'operazione è atomica senza bisogno di una
--- transazione esplicita lato client.
+-- Le funzioni sotto fanno lo scambio in un'unica funzione plpgsql, eseguita
+-- per intero nella transazione implicita della chiamata RPC. Le due righe
+-- sono bloccate con `FOR UPDATE` prima di leggerne `ordine`, in un ordine
+-- deterministico (per codice/id crescente): senza il lock, due scambi che
+-- condividono una riga (A↔B e B↔C) potrebbero leggere lo stesso valore di
+-- partenza in READ COMMITTED e produrre un `ordine` duplicato; l'ordine
+-- deterministico dei lock evita deadlock tra scambi concorrenti.
 
 create or replace function scambia_ordine_paesi(cod_a text, cod_b text)
 returns void
-language sql
+language plpgsql
 security invoker
 set search_path = ''
 as $$
-  update public.paesi p
-  set ordine = v.nuovo_ordine
-  from (
-    values
-      (cod_a, (select ordine from public.paesi where codice = cod_b)),
-      (cod_b, (select ordine from public.paesi where codice = cod_a))
-  ) as v(codice, nuovo_ordine)
-  where p.codice = v.codice;
+declare
+  ord_a integer;
+  ord_b integer;
+begin
+  if cod_a = cod_b then
+    return;
+  end if;
+
+  if cod_a < cod_b then
+    select ordine into ord_a from public.paesi where codice = cod_a for update;
+    select ordine into ord_b from public.paesi where codice = cod_b for update;
+  else
+    select ordine into ord_b from public.paesi where codice = cod_b for update;
+    select ordine into ord_a from public.paesi where codice = cod_a for update;
+  end if;
+
+  if ord_a is null or ord_b is null then
+    return;
+  end if;
+
+  update public.paesi set ordine = ord_b where codice = cod_a;
+  update public.paesi set ordine = ord_a where codice = cod_b;
+end;
 $$;
 
 comment on function scambia_ordine_paesi(text, text) is
-  'Scambia ordine tra due paesi in un''unica istruzione atomica. Usata da spostaPaese al posto di due UPDATE separate.';
+  'Scambia ordine tra due paesi in modo atomico, con lock deterministico sulle due righe per evitare duplicati sotto scambi concorrenti sovrapposti.';
 
 revoke all on function scambia_ordine_paesi(text, text) from public, anon;
 grant execute on function scambia_ordine_paesi(text, text) to authenticated;
 
 create or replace function scambia_ordine_categorie(id_a uuid, id_b uuid)
 returns void
-language sql
+language plpgsql
 security invoker
 set search_path = ''
 as $$
-  update public.categorie c
-  set ordine = v.nuovo_ordine
-  from (
-    values
-      (id_a, (select ordine from public.categorie where id = id_b)),
-      (id_b, (select ordine from public.categorie where id = id_a))
-  ) as v(id, nuovo_ordine)
-  where c.id = v.id;
+declare
+  ord_a integer;
+  ord_b integer;
+begin
+  if id_a = id_b then
+    return;
+  end if;
+
+  if id_a < id_b then
+    select ordine into ord_a from public.categorie where id = id_a for update;
+    select ordine into ord_b from public.categorie where id = id_b for update;
+  else
+    select ordine into ord_b from public.categorie where id = id_b for update;
+    select ordine into ord_a from public.categorie where id = id_a for update;
+  end if;
+
+  if ord_a is null or ord_b is null then
+    return;
+  end if;
+
+  update public.categorie set ordine = ord_b where id = id_a;
+  update public.categorie set ordine = ord_a where id = id_b;
+end;
 $$;
 
 comment on function scambia_ordine_categorie(uuid, uuid) is
-  'Scambia ordine tra due categorie in un''unica istruzione atomica. Usata da spostaCategoria al posto di due UPDATE separate.';
+  'Scambia ordine tra due categorie in modo atomico, con lock deterministico sulle due righe per evitare duplicati sotto scambi concorrenti sovrapposti.';
 
 revoke all on function scambia_ordine_categorie(uuid, uuid) from public, anon;
 grant execute on function scambia_ordine_categorie(uuid, uuid) to authenticated;

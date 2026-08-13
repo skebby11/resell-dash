@@ -137,7 +137,7 @@ describe("intervalloMeseNelPeriodo", () => {
   });
 
   it("un mese non nel formato YYYY-MM restituisce un intervallo vuoto, non date malformate", () => {
-    for (const mese of ["2026-13", "garbage", "2026-3", "2026-02-01"]) {
+    for (const mese of ["2026-13", "garbage", "2026-3", "2026-02-01", "0000-02"]) {
       const r = intervalloMeseNelPeriodo(mese, {});
       expect(r.da > r.a).toBe(true);
     }

@@ -9,7 +9,7 @@
  */
 
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MESE_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const MESE_RE = /^[1-9]\d{3}-(0[1-9]|1[0-2])$/;
 
 export interface Periodo {
   da?: string;

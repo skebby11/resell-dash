@@ -431,6 +431,13 @@ export async function creaCategoria(
  * non c'è un checkbox "aggiorna storico": la categoria *è* il campo prodotto,
  * e lasciare orfani bloccherebbe per sempre l'eliminazione.
  */
+/**
+ * Rinomina la categoria e propaga il nome ai prodotti in un'unica funzione
+ * SQL (0019_scritture_transazionali_articoli): la funzione blocca la riga
+ * categoria per la durata della transazione, così una rinomina concorrente
+ * della stessa categoria aspetta e riparte dal nome già aggiornato, invece
+ * di propagare in base a un nome ormai superato e lasciare prodotti orfani.
+ */
 export async function rinominaCategoria(
   stato: StatoCategoria,
   formData: FormData
@@ -442,93 +449,16 @@ export async function rinominaCategoria(
   if (!nome) return { seq, errore: "Indica un nome (max 60 caratteri)." };
 
   const supabase = await createClient();
-  const { data: attuale, error: eLettura } = await supabase
-    .from("categorie")
-    .select("nome")
-    .eq("id", id)
-    .maybeSingle();
-  if (eLettura) return { seq, errore: eLettura.message };
-  if (!attuale) return { seq, errore: "Categoria non trovata." };
-  const vecchioNome = attuale.nome;
-
-  const { error } = await supabase.from("categorie").update({ nome }).eq("id", id);
+  const { error } = await supabase.rpc("rinomina_categoria_con_propagazione", {
+    categoria_id: id,
+    nuovo_nome: nome,
+  });
   if (error?.code === "23505") return { seq, errore: `"${nome}" esiste già: nessun duplicato creato.` };
+  if (error?.message === "Categoria non trovata.") return { seq, errore: "Categoria non trovata." };
   if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
-
-  if (vecchioNome !== nome) {
-    const { ids, error: eIds } = await idsProdottiConCategoria(supabase, [vecchioNome, nome]);
-    const fallimento = eIds ?? (await aggiornaCategoriaProdotti(supabase, ids, nome));
-    if (fallimento) {
-      const { error: eRevert } = await supabase
-        .from("categorie")
-        .update({ nome: vecchioNome })
-        .eq("id", id);
-      return {
-        seq,
-        errore: eRevert
-          ? `Aggiornamento dei prodotti non riuscito (${fallimento}) e rollback della rinomina non riuscito: ${eRevert.message}`
-          : `L'aggiornamento dei prodotti non è riuscito: ${fallimento}`,
-      };
-    }
-  }
 
   rivalidaPagine();
   return { ok: true, seq: seq + 1 };
-}
-
-/**
- * PostgREST tronca a 1000: si pagina e si filtra in JS (uguaglianza
- * case-insensitive, non ILIKE). Cerca tutti i nomi passati (vecchio e nuovo):
- * un tentativo di rinomina precedente può essere fallito a metà, lasciando
- * una parte dei prodotti già sul nome nuovo — un retry deve ritrovarli per
- * completare la propagazione invece di lasciarli orfani.
- */
-async function idsProdottiConCategoria(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  nomi: string[]
-): Promise<{ ids: string[]; error?: string }> {
-  const ids: string[] = [];
-  const perPagina = 1000;
-  const cercati = new Set(nomi.map((n) => n.toLowerCase()));
-  for (let da = 0; ; da += perPagina) {
-    const { data, error } = await supabase
-      .from("prodotti")
-      .select("id, categoria")
-      .not("categoria", "is", null)
-      .order("id", { ascending: true })
-      .range(da, da + perPagina - 1);
-    if (error) return { ids, error: error.message };
-    const righe = data ?? [];
-    for (const r of righe) {
-      if (r.categoria != null && cercati.has(r.categoria.toLowerCase())) ids.push(r.id);
-    }
-    if (righe.length < perPagina) break;
-  }
-  return { ids };
-}
-
-/**
- * Non si interrompe al primo blocco fallito: fermarsi lascerebbe una parte
- * dei prodotti sul nome nuovo e una parte su quello vecchio, e senza
- * continuare sugli altri blocchi un retry avrebbe più lavoro da rifare del
- * necessario. Idempotente: riscrivere `categoria = nome` su un prodotto già
- * aggiornato non ha effetto.
- */
-async function aggiornaCategoriaProdotti(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  ids: string[],
-  nome: string
-): Promise<string | undefined> {
-  const blocco = 100;
-  let primoErrore: string | undefined;
-  for (let i = 0; i < ids.length; i += blocco) {
-    const { error } = await supabase
-      .from("prodotti")
-      .update({ categoria: nome })
-      .in("id", ids.slice(i, i + blocco));
-    if (error) primoErrore ??= error.message;
-  }
-  return primoErrore;
 }
 
 /** Attiva/disattiva una categoria. Disattivare non tocca `prodotti`. */

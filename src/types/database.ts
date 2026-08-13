@@ -368,6 +368,14 @@ export type Database = {
       // da spostaPaese/spostaCategoria al posto di due UPDATE separate.
       scambia_ordine_paesi: { Args: { cod_a: string; cod_b: string }; Returns: undefined };
       scambia_ordine_categorie: { Args: { id_a: string; id_b: string }; Returns: undefined };
+      // Scritture transazionali (0019_scritture_transazionali_articoli.sql):
+      // usate da eliminaArticolo/rinominaCategoria al posto di più richieste
+      // separate, per bloccare le righe coinvolte contro modifiche concorrenti.
+      elimina_articolo_con_ricalcolo: { Args: { articolo_id: string }; Returns: undefined };
+      rinomina_categoria_con_propagazione: {
+        Args: { categoria_id: string; nuovo_nome: string };
+        Returns: undefined;
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

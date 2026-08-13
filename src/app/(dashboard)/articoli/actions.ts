@@ -6,7 +6,6 @@ import { getContestoPaese, getPaeseVenditaArticolo } from "@/lib/data/queries";
 import {
   parseVendita,
   puoArchiviareArticolo,
-  puoEliminareArticolo,
   UUID_RE,
   type CampoVendita,
 } from "@/lib/validazione";
@@ -134,73 +133,18 @@ export async function annullaVendita(id: string): Promise<void> {
 }
 
 /**
- * Media storica di un solo prodotto, calcolata qui e non via
- * `ricalcola_prezzi_medi`: quella funzione resta service-role.
+ * Elimina l'articolo e ricalcola le medie del prodotto in un'unica funzione
+ * SQL (0019_scritture_transazionali_articoli): la funzione blocca la riga
+ * prodotto per la durata della transazione, così un'eliminazione concorrente
+ * su un altro articolo dello stesso prodotto aspetta invece di sovrascrivere
+ * la media con un valore calcolato su dati non ancora aggiornati.
  */
-async function ricalcolaPrezziMediProdotto(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  prodottoId: string
-): Promise<void> {
-  const { data, error } = await supabase
-    .from("articoli")
-    .select("costo_acquisto, prezzo_vendita, stato")
-    .eq("prodotto_id", prodottoId);
-  if (error) throw new Error(error.message);
-
-  const righe = data ?? [];
-  let prezzo_medio_acquisto: number | null = null;
-  let prezzo_medio_vendita: number | null = null;
-
-  if (righe.length > 0) {
-    const somma = (valori: number[]) => valori.reduce((acc, n) => acc + n, 0);
-    const arrotonda = (n: number) => Math.round(n * 100) / 100;
-
-    const costi = righe.map((r) => Number(r.costo_acquisto)).filter((n) => Number.isFinite(n));
-    if (costi.length > 0) prezzo_medio_acquisto = arrotonda(somma(costi) / costi.length);
-
-    const prezziVendita = righe
-      .filter((r) => (r.stato === "venduto" || r.stato === "consegnato") && r.prezzo_vendita != null)
-      .map((r) => Number(r.prezzo_vendita))
-      .filter((n) => Number.isFinite(n));
-    if (prezziVendita.length > 0) {
-      prezzo_medio_vendita = arrotonda(somma(prezziVendita) / prezziVendita.length);
-    }
-  }
-
-  const { error: updError } = await supabase
-    .from("prodotti")
-    .update({ prezzo_medio_acquisto, prezzo_medio_vendita })
-    .eq("id", prodottoId);
-  if (updError) throw new Error(updError.message);
-}
-
 export async function eliminaArticolo(id: string): Promise<void> {
   if (!UUID_RE.test(id)) throw new Error("Articolo non valido.");
 
   const supabase = await createClient();
-  const { data, error: loadError } = await supabase
-    .from("articoli")
-    .select("stato, prodotto_id")
-    .eq("id", id)
-    .maybeSingle();
-  if (loadError) throw new Error(loadError.message);
-  if (!data) throw new Error("Articolo non trovato.");
-  if (!puoEliminareArticolo(data.stato as StatoArticolo)) {
-    throw new Error("Si possono eliminare solo articoli non ancora venduti.");
-  }
-
-  // Predicato ripetuto anche nella query di scrittura: tra la lettura e qui una
-  // seconda richiesta può aver cambiato lo stato dell'articolo, e senza questo
-  // filtro si cancellerebbe comunque una riga ormai venduta.
-  const { error, count } = await supabase
-    .from("articoli")
-    .delete({ count: "exact" })
-    .eq("id", id)
-    .in("stato", ["acquistato", "in vendita"]);
+  const { error } = await supabase.rpc("elimina_articolo_con_ricalcolo", { articolo_id: id });
   if (error) throw new Error(error.message);
-  if (count === 0) throw new Error("Articolo non trovato o non eliminabile.");
-
-  await ricalcolaPrezziMediProdotto(supabase, data.prodotto_id);
 
   revalidatePath("/");
   revalidatePath("/articoli");
