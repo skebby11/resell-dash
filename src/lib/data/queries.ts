@@ -114,7 +114,9 @@ const SELECT_ARTICOLI = `
 export const ARTICOLI_PER_PAGINA = 50;
 
 /**
- * Articoli filtrati e paginati, dal più recente per data di acquisto.
+ * Articoli filtrati e paginati. Default: dal più recente per data di acquisto.
+ * Con `daVendita`/`aVendita` (dettaglio mese): per data di vendita crescente,
+ * e solo venduto/consegnato.
  *
  * Filtro, ricerca e paginazione stanno sul database e non in memoria: con oltre
  * mille articoli, servire tutte le righe a ogni visita produce megabyte di HTML
@@ -124,6 +126,8 @@ export async function getArticoliPaginati({
   stato,
   q,
   senzaPaese,
+  daVendita,
+  aVendita,
   pagina = 1,
   perPagina = ARTICOLI_PER_PAGINA,
 }: {
@@ -131,10 +135,17 @@ export async function getArticoliPaginati({
   q?: string;
   /** Isola le vendite senza paese noto (da /vendite-ue), per correggerle. */
   senzaPaese?: boolean;
+  /**
+   * Intervallo su `data_vendita` (ISO). Non chiamarli `da`/`a`: quelli sono
+   * gli offset di `eseguiPaginata` e maschererebbero il filtro data.
+   */
+  daVendita?: string;
+  aVendita?: string;
   pagina?: number;
   perPagina?: number;
 }): Promise<Pagina<Articolo>> {
   const supabase = await createClient();
+  const perDataVendita = daVendita != null || aVendita != null;
 
   function base(select: string, opzioni: { count: "exact"; head?: boolean }) {
     let query = supabase.from("articoli").select(select, opzioni);
@@ -146,6 +157,11 @@ export async function getArticoliPaginati({
     } else if (stato) {
       query = query.eq("stato", stato);
     }
+    // Range su data_vendita: solo vendite chiuse, anche se `stato` non è
+    // passato (il dettaglio mese non lo passa).
+    if (perDataVendita) query = query.in("stato", ["venduto", "consegnato"]);
+    if (daVendita) query = query.gte("data_vendita", daVendita);
+    if (aVendita) query = query.lte("data_vendita", aVendita);
     // Ricerca sul nome del prodotto collegato: possibile perché l'embed è !inner.
     if (q) query = query.ilike("prodotti.nome", `%${escapeLike(q)}%`);
     return query;
@@ -155,7 +171,9 @@ export async function getArticoliPaginati({
     "articoli",
     (da, a) =>
       base(SELECT_ARTICOLI, { count: "exact" })
-        .order("data_acquisto", { ascending: false })
+        .order(perDataVendita ? "data_vendita" : "data_acquisto", {
+          ascending: perDataVendita,
+        })
         // `id` come tie-break: senza un ordine totale, righe con la stessa data
         // possono cambiare pagina tra una richiesta e l'altra e sparire dall'elenco.
         .order("id", { ascending: true })
