@@ -96,6 +96,7 @@ export async function creaArticolo(
         avviso = `Categoria non aggiunta all'elenco: ${eCategoria.message}`;
       } else if (!eCategoria) {
         revalidatePath("/impostazioni");
+        revalidatePath("/inserimento");
       }
     }
   }

@@ -102,6 +102,7 @@ export function Filtri({
         <form action="/articoli" className="relative w-full sm:w-64">
           {stato && <input type="hidden" name="stato" value={stato} />}
           {archivio && <input type="hidden" name="archivio" value="1" />}
+          {senzaPaese && <input type="hidden" name="paese" value="mancante" />}
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <label htmlFor="ricerca-articoli" className="sr-only">
             Cerca prodotto
