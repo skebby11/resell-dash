@@ -67,6 +67,7 @@ export function toArticolo(row: RigaArticoloConProdotto): Articolo {
     paeseVendita: row.paese_vendita,
     spedizioniere: row.spedizioniere,
     note: row.note,
+    archiviatoAt: row.archiviato_at,
     prodottoSponsorizzato: row.prodotto_sponsorizzato,
     venditaPostOfferta: row.vendita_post_offerta,
     profitto: numero(row.profitto),

@@ -275,6 +275,7 @@ function generaArticoli(): Articolo[] {
       paeseVendita: null,
       spedizioniere: null,
       note: null,
+      archiviatoAt: null,
       prodottoSponsorizzato: false,
       venditaPostOfferta: false,
       profitto: null,

@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { parseVendita, UUID_RE, type CampoVendita } from "@/lib/validazione";
+import { getContestoPaese, getPaeseVenditaArticolo } from "@/lib/data/queries";
+import {
+  parseVendita,
+  puoArchiviareArticolo,
+  UUID_RE,
+  type CampoVendita,
+} from "@/lib/validazione";
 import { STATI_ARTICOLO, type StatoArticolo } from "@/types";
 
 export interface StatoVendita {
@@ -16,6 +22,7 @@ export interface StatoVendita {
 function rivalidaPagine() {
   revalidatePath("/");
   revalidatePath("/articoli");
+  revalidatePath("/vendite-ue");
 }
 
 /**
@@ -29,7 +36,12 @@ export async function registraVendita(
   formData: FormData
 ): Promise<StatoVendita> {
   const seq = stato.seq ?? 0;
-  const esito = parseVendita(formData);
+  const idRaw = String(formData.get("id") ?? "").trim();
+  const [ctxBase, paeseVenditaAttuale] = await Promise.all([
+    getContestoPaese(),
+    UUID_RE.test(idRaw) ? getPaeseVenditaArticolo(idRaw) : Promise.resolve(null),
+  ]);
+  const esito = parseVendita(formData, { ...ctxBase, paeseVenditaAttuale });
   if (!esito.ok) return { seq, campi: esito.campi, errore: esito.errore };
   const v = esito.valori;
 
@@ -110,9 +122,87 @@ export async function annullaVendita(id: string): Promise<void> {
       spedizioniere: null,
       prodotto_sponsorizzato: false,
       vendita_post_offerta: false,
+      // Un invenduto non può restare in archivio: la lista Archivio è
+      // per i venduti, e senza questo clear l'articolo sparirebbe da entrambe.
+      archiviato_at: null,
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
 
   rivalidaPagine();
+}
+
+/**
+ * Elimina l'articolo e ricalcola le medie del prodotto in un'unica funzione
+ * SQL (0019_scritture_transazionali_articoli): la funzione blocca la riga
+ * prodotto per la durata della transazione, così un'eliminazione concorrente
+ * su un altro articolo dello stesso prodotto aspetta invece di sovrascrivere
+ * la media con un valore calcolato su dati non ancora aggiornati.
+ */
+export async function eliminaArticolo(id: string): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Articolo non valido.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("elimina_articolo_con_ricalcolo", { articolo_id: id });
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/");
+  revalidatePath("/articoli");
+  revalidatePath("/catalogo");
+}
+
+export async function archiviaArticolo(id: string): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Articolo non valido.");
+
+  const supabase = await createClient();
+  const { data, error: loadError } = await supabase
+    .from("articoli")
+    .select("stato, archiviato_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadError) throw new Error(loadError.message);
+  if (!data) throw new Error("Articolo non trovato.");
+  if (!puoArchiviareArticolo(data.stato as StatoArticolo, data.archiviato_at != null)) {
+    throw new Error("Si possono archiviare solo articoli già venduti.");
+  }
+
+  // Stesso predicato ripetuto in scrittura del delete sopra: senza vincolare
+  // stato e archiviato_at qui, una richiesta concorrente potrebbe archiviare
+  // un articolo tornato invenduto nel frattempo, o ri-archiviare inutilmente.
+  const { error, count } = await supabase
+    .from("articoli")
+    .update({ archiviato_at: new Date().toISOString() }, { count: "exact" })
+    .eq("id", id)
+    .in("stato", ["venduto", "consegnato"])
+    .is("archiviato_at", null);
+  if (error) throw new Error(error.message);
+  if (count === 0) throw new Error("Articolo non trovato o non archiviabile.");
+
+  revalidatePath("/articoli");
+}
+
+export async function ripristinaArticolo(id: string): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Articolo non valido.");
+
+  const supabase = await createClient();
+  const { data, error: loadError } = await supabase
+    .from("articoli")
+    .select("stato")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadError) throw new Error(loadError.message);
+  if (!data) throw new Error("Articolo non trovato.");
+  if (data.stato !== "venduto" && data.stato !== "consegnato") {
+    throw new Error("Si possono ripristinare solo articoli già venduti.");
+  }
+
+  const { error, count } = await supabase
+    .from("articoli")
+    .update({ archiviato_at: null }, { count: "exact" })
+    .eq("id", id)
+    .in("stato", ["venduto", "consegnato"]);
+  if (error) throw new Error(error.message);
+  if (count === 0) throw new Error("Articolo non trovato o non ripristinabile.");
+
+  revalidatePath("/articoli");
 }

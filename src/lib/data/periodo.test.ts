@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { normalizzaData, presetAttivo, presetPeriodo, risolviPeriodo } from "./periodo";
+import {
+  intervalloMeseNelPeriodo,
+  normalizzaData,
+  presetAttivo,
+  presetPeriodo,
+  risolviPeriodo,
+} from "./periodo";
 
 describe("normalizzaData", () => {
   it("accetta una data ISO valida", () => {
@@ -76,5 +82,64 @@ describe("presetAttivo", () => {
 
   it("un intervallo personalizzato non combacia con nessun preset", () => {
     expect(presetAttivo({ da: "2026-03-01", a: "2026-05-01" }, oggi)).toBeUndefined();
+  });
+});
+
+describe("intervalloMeseNelPeriodo", () => {
+  it("senza periodo restituisce il mese di calendario intero", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", {})).toEqual({
+      da: "2026-03-01",
+      a: "2026-03-31",
+    });
+  });
+
+  it("febbraio non bisestile finisce il 28", () => {
+    expect(intervalloMeseNelPeriodo("2026-02", {}).a).toBe("2026-02-28");
+  });
+
+  it("interseca un periodo a metà mese", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { da: "2026-03-10", a: "2026-03-20" })).toEqual({
+      da: "2026-03-10",
+      a: "2026-03-20",
+    });
+  });
+
+  it("periodo solo da ritaglia l'inizio e lascia la fine del mese", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { da: "2026-03-10" })).toEqual({
+      da: "2026-03-10",
+      a: "2026-03-31",
+    });
+  });
+
+  it("periodo solo a ritaglia la fine (ultimi-12-mesi sul mese corrente)", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { a: "2026-03-20" })).toEqual({
+      da: "2026-03-01",
+      a: "2026-03-20",
+    });
+  });
+
+  it("periodo più largo del mese restituisce il mese intero", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { da: "2026-01-01", a: "2026-12-31" })).toEqual({
+      da: "2026-03-01",
+      a: "2026-03-31",
+    });
+  });
+
+  it("febbraio bisestile finisce il 29", () => {
+    expect(intervalloMeseNelPeriodo("2028-02", {}).a).toBe("2028-02-29");
+  });
+
+  it("una data non valida nel periodo viene ignorata", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { da: "nonsenso" })).toEqual({
+      da: "2026-03-01",
+      a: "2026-03-31",
+    });
+  });
+
+  it("un mese non nel formato YYYY-MM restituisce un intervallo vuoto, non date malformate", () => {
+    for (const mese of ["2026-13", "garbage", "2026-3", "2026-02-01", "0000-02"]) {
+      const r = intervalloMeseNelPeriodo(mese, {});
+      expect(r.da > r.a).toBe(true);
+    }
   });
 });

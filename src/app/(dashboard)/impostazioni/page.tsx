@@ -1,7 +1,15 @@
 import { CheckCircle2, CircleDashed, Database, ScanBarcode, Sparkles, Gamepad2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCanaliConConteggio, getUtenteCorrente } from "@/lib/data/queries";
+import {
+  getCanaliConConteggio,
+  getCategorieConConteggio,
+  getPaeseOrigine,
+  getPaesi,
+  getUtenteCorrente,
+} from "@/lib/data/queries";
 import { CanaliManager } from "@/components/dashboard/canali-manager";
+import { CategorieManager } from "@/components/dashboard/categorie-manager";
+import { PaesiManager } from "@/components/dashboard/paesi-manager";
 import { ETICHETTA_TIPO_CANALE, TIPI_CANALE } from "@/types";
 
 // La pagina è ora dietro il gate del layout: solo utenti in `utenti_autorizzati`
@@ -58,7 +66,13 @@ function isConfigured(envVars: string[]): boolean {
 }
 
 export default async function ImpostazioniPage() {
-  const [utente, { canali, orfani }] = await Promise.all([getUtenteCorrente(), getCanaliConConteggio()]);
+  const [utente, { canali, orfani }, paesi, paeseOrigine, categorie] = await Promise.all([
+    getUtenteCorrente(),
+    getCanaliConConteggio(),
+    getPaesi(),
+    getPaeseOrigine(),
+    getCategorieConConteggio(),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -160,6 +174,31 @@ export default async function ImpostazioniPage() {
               orfani={orfani.filter((o) => o.tipo === tipo)}
             />
           ))}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <h2 className="font-display text-lg italic text-foreground">Paesi</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Paesi di vendita nei form e in Vendite UE. Il codice ISO è immutabile: un codice sbagliato
+          è una riga nuova. Disattivare un paese non tocca gli articoli che lo usano già.
+        </p>
+
+        <div className="mt-5">
+          <PaesiManager paesi={paesi} paeseOrigine={paeseOrigine} />
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <h2 className="font-display text-lg italic text-foreground">Categorie</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Categorie suggerite nel form di inserimento. Restano un campo di testo libero: un valore
+          non elencato qui resta comunque accettabile, e disattivare una categoria non tocca i
+          prodotti che la usano già. Rinominare aggiorna i modelli esistenti.
+        </p>
+
+        <div className="mt-5">
+          <CategorieManager categorie={categorie} />
         </div>
       </section>
     </div>

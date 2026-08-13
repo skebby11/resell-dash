@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DettaglioMese } from "@/components/dashboard/dettaglio-mese";
 import { getDatiDashboard } from "@/lib/data/queries";
 import { risolviPeriodo } from "@/lib/data/periodo";
 import { formatCurrency } from "@/lib/format";
@@ -124,7 +125,13 @@ export default async function DashboardPage({
                   <TableHead className="text-right">Numero vendite</TableHead>
                   <TableHead className="text-right">Prezzo medio</TableHead>
                   <TableHead className="text-right">Totale vendite</TableHead>
+                  <TableHead className="text-right">Costo merce</TableHead>
+                  <TableHead className="text-right">Fee</TableHead>
+                  <TableHead className="text-right">Spedizione</TableHead>
                   <TableHead className="text-right">Profitto</TableHead>
+                  <TableHead className="text-right">
+                    <span className="sr-only">Dettaglio</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -138,12 +145,24 @@ export default async function DashboardPage({
                     <TableCell className="text-right font-mono-num">
                       {formatCurrency(m.totaleVendite)}
                     </TableCell>
+                    <TableCell className="text-right font-mono-num">
+                      {formatCurrency(m.costoMerci)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono-num">
+                      {formatCurrency(m.feeTotali)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono-num">
+                      {formatCurrency(m.spedizioneTotale)}
+                    </TableCell>
                     <TableCell
                       className={`text-right font-mono-num ${
                         m.profitto >= 0 ? "text-positive" : "text-negative"
                       }`}
                     >
                       {formatCurrency(m.profitto)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DettaglioMese mese={m} periodo={periodo} />
                     </TableCell>
                   </TableRow>
                 ))}

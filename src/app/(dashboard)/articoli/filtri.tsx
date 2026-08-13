@@ -20,28 +20,50 @@ export function Filtri({
   stato,
   q,
   senzaPaese,
+  archivio,
 }: {
   stato?: StatoArticolo;
   q?: string;
   /** Filtro attivo da /vendite-ue: isola le vendite senza paese noto. */
   senzaPaese?: boolean;
+  /** Vista archivio: `?archivio=1`. */
+  archivio?: boolean;
 }) {
   function href(nuovoStato?: StatoArticolo) {
     const params = new URLSearchParams();
     if (nuovoStato) params.set("stato", nuovoStato);
     if (q) params.set("q", q);
+    if (senzaPaese) params.set("paese", "mancante");
+    if (archivio) params.set("archivio", "1");
     const qs = params.toString();
     return qs ? `/articoli?${qs}` : "/articoli";
   }
 
+  const hrefTutti = (() => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (senzaPaese) params.set("paese", "mancante");
+    const qs = params.toString();
+    return qs ? `/articoli?${qs}` : "/articoli";
+  })();
+
+  const hrefArchivio = (() => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (senzaPaese) params.set("paese", "mancante");
+    params.set("archivio", "1");
+    return `/articoli?${params.toString()}`;
+  })();
+
   const voci: { chiave: string; label: string; attivo: boolean; url: string }[] = [
-    { chiave: "tutti", label: "Tutti", attivo: !stato && !senzaPaese, url: href() },
+    { chiave: "tutti", label: "Tutti", attivo: !stato && !senzaPaese && !archivio, url: hrefTutti },
     ...STATI_ARTICOLO.map((s) => ({
       chiave: s,
       label: ETICHETTE[s],
       attivo: !senzaPaese && stato === s,
       url: href(s),
     })),
+    { chiave: "archivio", label: "Archivio", attivo: Boolean(archivio), url: hrefArchivio },
   ];
 
   return (
@@ -82,6 +104,8 @@ export function Filtri({
             resta nell'URL come il filtro di stato. */}
         <form action="/articoli" className="relative w-full sm:w-64">
           {stato && <input type="hidden" name="stato" value={stato} />}
+          {archivio && <input type="hidden" name="archivio" value="1" />}
+          {senzaPaese && <input type="hidden" name="paese" value="mancante" />}
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <label htmlFor="ricerca-articoli" className="sr-only">
             Cerca prodotto

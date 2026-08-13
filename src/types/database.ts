@@ -18,6 +18,7 @@ export type Database = {
     Tables: {
       articoli: {
         Row: {
+          archiviato_at: string | null;
           costo_acquisto: number;
           costo_spedizione: number | null;
           created_at: string;
@@ -39,6 +40,7 @@ export type Database = {
           vendita_post_offerta: boolean;
         };
         Insert: {
+          archiviato_at?: string | null;
           costo_acquisto: number;
           costo_spedizione?: number | null;
           created_at?: string;
@@ -60,6 +62,7 @@ export type Database = {
           vendita_post_offerta?: boolean;
         };
         Update: {
+          archiviato_at?: string | null;
           costo_acquisto?: number;
           costo_spedizione?: number | null;
           created_at?: string;
@@ -87,6 +90,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "prodotti";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "articoli_paese_vendita_fkey";
+            columns: ["paese_vendita"];
+            isOneToOne: false;
+            referencedRelation: "paesi";
+            referencedColumns: ["codice"];
           },
         ];
       };
@@ -120,10 +130,65 @@ export type Database = {
         };
         Relationships: [];
       };
+      // Categorie prodotto configurabili (0015_categorie_configurabili):
+      // `prodotti.categoria` resta testo libero, questa tabella è il
+      // catalogo dei suggerimenti gestibili da Impostazioni.
+      categorie: {
+        Row: {
+          attivo: boolean;
+          created_at: string;
+          id: string;
+          nome: string;
+          ordine: number;
+        };
+        Insert: {
+          attivo?: boolean;
+          created_at?: string;
+          id?: string;
+          nome: string;
+          ordine?: number;
+        };
+        Update: {
+          attivo?: boolean;
+          created_at?: string;
+          id?: string;
+          nome?: string;
+          ordine?: number;
+        };
+        Relationships: [];
+      };
       impostazioni: {
         Row: { chiave: string; created_at: string; id: string; valore: Json | null };
         Insert: { chiave: string; created_at?: string; id?: string; valore?: Json | null };
         Update: { chiave?: string; created_at?: string; id?: string; valore?: Json | null };
+        Relationships: [];
+      };
+      // Paesi di vendita configurabili (0014_paesi_configurabili): il codice
+      // ISO è PK immutabile; `ue` non è inferito dal codice.
+      paesi: {
+        Row: {
+          attivo: boolean;
+          codice: string;
+          created_at: string;
+          nome: string;
+          ordine: number;
+          ue: boolean;
+        };
+        Insert: {
+          attivo?: boolean;
+          codice: string;
+          created_at?: string;
+          nome: string;
+          ordine?: number;
+          ue?: boolean;
+        };
+        Update: {
+          attivo?: boolean;
+          created_at?: string;
+          nome?: string;
+          ordine?: number;
+          ue?: boolean;
+        };
         Relationships: [];
       };
       prodotti: {
@@ -178,8 +243,11 @@ export type Database = {
           mese: string | null;
           numero_vendite: number | null;
           prezzo_medio_vendita: number | null;
-          profitto_totale: number | null;
           totale_vendite: number | null;
+          costo_merci: number | null;
+          fee_totali: number | null;
+          spedizione_totale: number | null;
+          profitto_totale: number | null;
         };
         Relationships: [];
       };
@@ -199,6 +267,18 @@ export type Database = {
       // usano ciascun canale prima di disattivarlo o rinominarlo.
       v_conteggio_canali: {
         Row: { conteggio: number | null; nome: string | null; tipo: string | null };
+        Relationships: [];
+      };
+      // Conteggio articoli per codice paese di vendita (0014): a supporto
+      // della pagina Impostazioni, prima di cancellare o disattivare un paese.
+      v_conteggio_paesi: {
+        Row: { codice: string | null; conteggio: number | null };
+        Relationships: [];
+      };
+      // Conteggio prodotti per stringa categoria (0015): a supporto della
+      // pagina Impostazioni, prima di cancellare o disattivare una categoria.
+      v_conteggio_categorie: {
+        Row: { conteggio: number | null; nome: string | null };
         Relationships: [];
       };
       v_distribuzione_categoria: {
@@ -262,6 +342,9 @@ export type Database = {
           numero_vendite: number;
           prezzo_medio_vendita: number;
           totale_vendite: number;
+          costo_merci: number;
+          fee_totali: number;
+          spedizione_totale: number;
           profitto_totale: number;
         }[];
       };
@@ -280,6 +363,18 @@ export type Database = {
       dashboard_distribuzione_destinazione: {
         Args: { p_da: string | null; p_a: string | null };
         Returns: { label: string; value: number }[];
+      };
+      // Scambio atomico di `ordine` (0018_scambio_ordine_atomico.sql): usate
+      // da spostaPaese/spostaCategoria al posto di due UPDATE separate.
+      scambia_ordine_paesi: { Args: { cod_a: string; cod_b: string }; Returns: undefined };
+      scambia_ordine_categorie: { Args: { id_a: string; id_b: string }; Returns: undefined };
+      // Scritture transazionali (0019_scritture_transazionali_articoli.sql):
+      // usate da eliminaArticolo/rinominaCategoria al posto di più richieste
+      // separate, per bloccare le righe coinvolte contro modifiche concorrenti.
+      elimina_articolo_con_ricalcolo: { Args: { articolo_id: string }; Returns: undefined };
+      rinomina_categoria_con_propagazione: {
+        Args: { categoria_id: string; nuovo_nome: string };
+        Returns: undefined;
       };
     };
     Enums: { [_ in never]: never };

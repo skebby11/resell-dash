@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/format";
-import { CATEGORIE, PIATTAFORME_GIOCO } from "@/types";
+import { PIATTAFORME_GIOCO } from "@/types";
 import { creaArticolo, type StatoInserimento } from "./actions";
 
 export interface ProdottoNoto {
@@ -214,11 +214,14 @@ function ScansioneBarcode({ onRilevato }: { onRilevato: (codice: string) => void
 function CampiInserimento({
   prodotti,
   fontiAcquisto,
+  categorie,
   campi,
 }: {
   prodotti: ProdottoNoto[];
   /** Canali attivi letti dal database (0013_canali_configurabili), non più una costante. */
   fontiAcquisto: string[];
+  /** Categorie attive lette dal database (0015_categorie_configurabili), non più una costante. */
+  categorie: string[];
   campi: StatoInserimento["campi"];
 }) {
   const [nome, setNome] = useState("");
@@ -548,7 +551,7 @@ function CampiInserimento({
               placeholder="Videogiochi, Console…"
             />
             <datalist id="lista-categorie">
-              {CATEGORIE.map((c) => (
+              {categorie.map((c) => (
                 <option key={c} value={c} />
               ))}
             </datalist>
@@ -672,9 +675,11 @@ function CampiInserimento({
 export function InserimentoForm({
   prodotti,
   fontiAcquisto,
+  categorie,
 }: {
   prodotti: ProdottoNoto[];
   fontiAcquisto: string[];
+  categorie: string[];
 }) {
   const [stato, action] = useActionState<StatoInserimento, FormData>(creaArticolo, { seq: 0 });
 
@@ -705,6 +710,7 @@ export function InserimentoForm({
         key={stato.seq}
         prodotti={prodotti}
         fontiAcquisto={fontiAcquisto}
+        categorie={categorie}
         campi={stato.campi}
       />
       <BottoneSalva />

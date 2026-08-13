@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { parseInserimento, type CampoInserimento } from "@/lib/validazione";
+import { parseInserimento, parseNomeEtichetta, type CampoInserimento } from "@/lib/validazione";
 import { normalizzaBarcode } from "@/lib/integrations/barcode";
 
 export interface StatoInserimento {
@@ -69,6 +69,38 @@ export async function creaArticolo(
 
   const supabase = await createClient();
 
+  // Categoria digitata (anche su un prodotto già esistente) → `categorie`,
+  // così compare in Impostazioni. Si fa subito, prima dell'articolo: se il
+  // prodotto è stato creato e l'articolo fallisce, il nome non deve sparire.
+  // 23505 = già presente (unicità case-insensitive): si ignora.
+  const nomeCategoria = categoria ? parseNomeEtichetta(categoria) : undefined;
+  let avviso: string | undefined;
+  if (categoria && !nomeCategoria) {
+    avviso =
+      "Categoria non valida (max 60 caratteri): non è stata aggiunta all'elenco.";
+  } else if (nomeCategoria) {
+    const { data: ultimo, error: eOrdine } = await supabase
+      .from("categorie")
+      .select("ordine")
+      .order("ordine", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (eOrdine) {
+      avviso = `Categoria non aggiunta all'elenco: ${eOrdine.message}`;
+    } else {
+      const { error: eCategoria } = await supabase.from("categorie").insert({
+        nome: nomeCategoria,
+        ordine: (ultimo?.ordine ?? -1) + 1,
+      });
+      if (eCategoria && eCategoria.code !== "23505") {
+        avviso = `Categoria non aggiunta all'elenco: ${eCategoria.message}`;
+      } else if (!eCategoria) {
+        revalidatePath("/impostazioni");
+        revalidatePath("/inserimento");
+      }
+    }
+  }
+
   // Il barcode è una chiave di deduplica più affidabile del nome: se il
   // prodotto è già censito con questo codice va riusato, senza nemmeno
   // arrivare al confronto per nome.
@@ -86,7 +118,6 @@ export async function creaArticolo(
   }
 
   let prodottoCreato: string | undefined;
-  let avviso: string | undefined;
   // Distingue "trovato per barcode" (già gestito sopra) da "trovato per nome
   // in questo blocco": solo nel secondo caso ha senso provare a collegare
   // retroattivamente il barcode, perché nel primo il prodotto ce l'ha già.
@@ -126,10 +157,12 @@ export async function creaArticolo(
       .is("barcode", null)
       .select("id");
     if (erroreCollega) {
-      avviso = `Prodotto salvato, ma il barcode non è stato collegato al catalogo: ${erroreCollega.message}`;
+      const msg = `Prodotto salvato, ma il barcode non è stato collegato al catalogo: ${erroreCollega.message}`;
+      avviso = avviso ? `${avviso} ${msg}` : msg;
     } else if (!collegato?.length) {
-      avviso =
+      const msg =
         "Prodotto salvato: il barcode non è stato collegato perché questo prodotto ne ha già uno diverso registrato.";
+      avviso = avviso ? `${avviso} ${msg}` : msg;
     }
   }
 
@@ -138,7 +171,7 @@ export async function creaArticolo(
       .from("prodotti")
       .insert({
         nome: nomeProdotto,
-        categoria,
+        categoria: nomeCategoria ?? categoria,
         barcode,
         foto_url: fotoUrl,
         piattaforma_gioco: piattaformaGioco,

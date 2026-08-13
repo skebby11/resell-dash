@@ -4,6 +4,8 @@ import {
   ARTICOLI_PER_PAGINA,
   getArticoliPaginati,
   getCanaliAttivi,
+  getPaeseOrigine,
+  getPaesi,
   normalizzaPagina,
   normalizzaStato,
 } from "@/lib/data/queries";
@@ -14,7 +16,7 @@ export default async function ArticoliPage({
   searchParams,
 }: {
   // In Next.js 16 searchParams è asincrono.
-  searchParams: Promise<{ stato?: string; q?: string; p?: string; paese?: string }>;
+  searchParams: Promise<{ stato?: string; q?: string; p?: string; paese?: string; archivio?: string }>;
 }) {
   const params = await searchParams;
   const stato = normalizzaStato(params.stato);
@@ -23,25 +25,40 @@ export default async function ArticoliPage({
   // senza paese noto e correggerle. Sovrascrive il filtro di stato (le
   // vendite senza paese sono per forza venduto/consegnato).
   const senzaPaese = params.paese === "mancante";
+  const inArchivio = params.archivio === "1";
+  const archivio = inArchivio ? "archivio" : senzaPaese ? "tutti" : "attivi";
 
   // `pagina` dal risultato e non dal parametro: una richiesta fuori intervallo
   // viene riportata all'ultima pagina valida, e l'indicatore deve dire dove
   // siamo davvero.
-  const [{ righe, totale, pagina }, piattaformeVendita, spedizionieri] = await Promise.all([
-    getArticoliPaginati({ stato, q, senzaPaese, pagina: normalizzaPagina(params.p) }),
-    getCanaliAttivi("piattaforma_vendita"),
-    getCanaliAttivi("spedizioniere"),
-  ]);
+  const [{ righe, totale, pagina }, piattaformeVendita, spedizionieri, paesi, paeseOrigine] =
+    await Promise.all([
+      getArticoliPaginati({ stato, q, senzaPaese, archivio, pagina: normalizzaPagina(params.p) }),
+      getCanaliAttivi("piattaforma_vendita"),
+      getCanaliAttivi("spedizioniere"),
+      getPaesi(),
+      getPaeseOrigine(),
+    ]);
 
-  // Nessun filtro attivo e zero risultati: il magazzino è davvero vuoto, non è
-  // una ricerca senza esiti.
+  // Lista di default vuota: i Filtri restano visibili, altrimenti Archivio
+  // sparisce quando ogni venduto è stato archiviato.
   if (totale === 0 && !stato && !q && !senzaPaese) {
     return (
-      <StatoVuoto
-        titolo="Magazzino vuoto"
-        descrizione="Nessun articolo registrato finora. Ogni acquisto inserito compare qui con il suo stato, dall'acquisto alla consegna."
-        azione={{ href: "/inserimento", label: "Registra un acquisto" }}
-      />
+      <div className="flex flex-col gap-4">
+        <Filtri stato={stato} q={q} senzaPaese={senzaPaese} archivio={inArchivio} />
+        {archivio === "archivio" ? (
+          <StatoVuoto
+            titolo="Nessun articolo in archivio"
+            descrizione="Gli articoli venduti che archivi scompaiono da questa lista, ma restano nei totali e in Vendite UE."
+          />
+        ) : (
+          <StatoVuoto
+            titolo="Magazzino vuoto"
+            descrizione="Nessun articolo registrato finora. Ogni acquisto inserito compare qui con il suo stato, dall'acquisto alla consegna."
+            azione={{ href: "/inserimento", label: "Registra un acquisto" }}
+          />
+        )}
+      </div>
     );
   }
 
@@ -50,6 +67,7 @@ export default async function ArticoliPage({
     if (senzaPaese) qs.set("paese", "mancante");
     else if (stato) qs.set("stato", stato);
     if (q) qs.set("q", q);
+    if (inArchivio) qs.set("archivio", "1");
     if (p > 1) qs.set("p", String(p));
     const s = qs.toString();
     return s ? `/articoli?${s}` : "/articoli";
@@ -57,11 +75,13 @@ export default async function ArticoliPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <Filtri stato={stato} q={q} senzaPaese={senzaPaese} />
+      <Filtri stato={stato} q={q} senzaPaese={senzaPaese} archivio={inArchivio} />
       <ArticoliTable
         articoli={righe}
         piattaformeVendita={piattaformeVendita}
         spedizionieri={spedizionieri}
+        paesi={paesi}
+        paeseOrigine={paeseOrigine}
       />
       <Paginazione
         pagina={pagina}

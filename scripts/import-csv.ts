@@ -234,12 +234,16 @@ interface ArticoloImportato {
 
 /** Il foglio ha solo "Italia"/"Estero": mappa su `destinazione` + `paese_vendita`
  * senza mai indovinare il paese estero, che il foglio non registra.
- * `paese_vendita='IT'` implica `destinazione='Italia'`; per l'estero il paese
- * resta NULL — il CHECK di coerenza dello schema ammette NULL a prescindere
- * da `destinazione`. */
-function destinazionePaese(raw: string): { destinazione: string | null; paeseVendita: string | null } {
+ * `Italia` diventa il paese di origine dell'installazione; per l'estero il
+ * paese resta NULL — il CHECK di coerenza dello schema ammette NULL a
+ * prescindere da `destinazione`. Nessun codice assente da `paesi` viene
+ * inserito automaticamente. */
+function destinazionePaese(
+  raw: string,
+  paeseOrigine: string
+): { destinazione: string | null; paeseVendita: string | null } {
   const destinazione = testo(raw);
-  if (destinazione === "Italia") return { destinazione, paeseVendita: "IT" };
+  if (destinazione === "Italia") return { destinazione, paeseVendita: paeseOrigine };
   return { destinazione, paeseVendita: null };
 }
 
@@ -249,7 +253,7 @@ interface Anomalia {
   motivo: string;
 }
 
-function trasforma(righe: string[][]) {
+function trasforma(righe: string[][], paeseOrigine: string) {
   const articoli: ArticoloImportato[] = [];
   const anomalie: Anomalia[] = [];
   let scartate = 0;
@@ -307,7 +311,7 @@ function trasforma(righe: string[][]) {
     const noteFoglio = testo(r[COL.note] ?? "");
     if (noteFoglio) note.push(noteFoglio);
 
-    const { destinazione, paeseVendita } = destinazionePaese(r[COL.destinazione] ?? "");
+    const { destinazione, paeseVendita } = destinazionePaese(r[COL.destinazione] ?? "", paeseOrigine);
 
     articoli.push({
       nomeProdotto: nome,
@@ -441,9 +445,22 @@ async function aggiornaVendita(
   if (righe.length > 0) process.stdout.write("\n");
 }
 
+/** Stesso default di `getPaeseOrigine`: `IT` se la chiave manca o non è un ISO a due lettere. */
+async function leggiPaeseOrigine(): Promise<string> {
+  const { data, error } = await supabase
+    .from("impostazioni")
+    .select("valore")
+    .eq("chiave", "paese_origine")
+    .maybeSingle();
+  if (error) throw new Error(`Lettura paese origine: ${error.message}`);
+  const v = data?.valore;
+  return typeof v === "string" && /^[A-Z]{2}$/.test(v) ? v : "IT";
+}
+
 async function main() {
+  const paeseOrigine = await leggiPaeseOrigine();
   const righe = parseCsv(readFileSync(FILE!, "utf8"));
-  const { articoli, anomalie, scartate } = trasforma(righe);
+  const { articoli, anomalie, scartate } = trasforma(righe, paeseOrigine);
 
   console.log(`CSV: ${righe.length - 1} righe dati`);
   console.log(`  scartate (senza nome, padding del foglio): ${scartate}`);

@@ -23,17 +23,22 @@ tables for sales, profit, and capital tied up in stock.
 
 - **Analytics dashboard** — KPIs (number of sales, average sale price, total revenue, profit,
   capital tied up in stock, invested capital), a monthly sales chart, and category / platform /
-  source / destination breakdowns.
+  source / destination breakdowns. The monthly table also shows cost of goods, fees and shipping,
+  with a **Dettaglio** dialog that lists the individual sales for that month.
 - **Inventory management** — paginated table of items (`articoli`) with status filters
   (`acquistato` / `in vendita` / `venduto` / `consegnato`) and search. Filtering, search and
-  pagination run in Postgres, not in the browser.
+  pagination run in Postgres, not in the browser. Unsold items can be **deleted**; sold ones can
+  be **archived** (hidden from Articoli by default, still counted in KPIs, monthly totals and
+  Vendite UE).
 - **Sale recording** — mark an item as sold from the items table: date, price, fee, shipping,
-  platform, courier, destination. Profit is computed by the database, never by the app. Quick
-  state transitions (list for sale, mark delivered) and an undo that clears the sale data.
+  platform, courier, destination country. Profit is computed by the database, never by the app.
+  Quick state transitions (list for sale, mark delivered) and an undo that clears the sale data
+  (and unarchives if needed).
 - **Product catalog** — reusable product records (`prodotti`) for models like "PS5 Slim" or
   "FIFA 24", with average purchase/sale price recomputed from actual history.
 - **Manual entry form** — add a new purchase by hand. The product is given by name with
-  autocomplete over the catalog; an unknown name creates the product on save.
+  autocomplete over the catalog; an unknown name creates the product on save. Categories come
+  from Settings, not from hardcoded lists.
 - **Barcode lookup** — scan or type a barcode to recognize an item you've already handled before:
   internal catalog first (zero external calls), and for a barcode the catalog doesn't know yet,
   search the title on [IGDB](#barcode-lookup) and pick from the results to link it. See
@@ -41,14 +46,18 @@ tables for sales, profit, and capital tied up in stock.
 - **Spreadsheet import** — bulk import from a Google Sheets CSV export, with a dry-run mode.
 - **Invite-only auth** — passwordless email magic link. There is no sign-up flow: access is
   restricted to an allowlist of email addresses, enforced in Row Level Security policies.
-- **Settings page** — current account and integration status.
+- **Settings (Impostazioni)** — account and integration status, plus per-install configuration:
+  sales platforms / purchase sources / couriers (`canali`), sale countries (`paesi`), product
+  categories (`categorie`), and the **home country** (`paese_origine`, default `IT`). Countries
+  and categories are **not** hardcoded in forms: the seed ships the 27 EU members plus the US
+  as an extra-EU destination; you can add, rename, deactivate or remove unused rows from Settings.
 
 ### Roadmap / Planned (not implemented yet)
 
 - **Voice entry**: record audio → transcription via Whisper (Groq) → parsing with Claude →
   user confirmation.
 - **Editing purchase data** — purchase date, cost and source can only be set at creation; there
-  is no edit form for them yet (the sale side is fully editable).
+  is no edit form for them yet (the sale side is fully editable; unsold items can be deleted).
 - **Paid barcode source (optional)** — [PriceCharting's API](#is-there-a-free-barcode--video-game-source-research-notes)
   genuinely supports UPC lookup for video games, but requires its $49/month Legendary tier. Not
   integrated; would slot in as an optional step gated behind its own environment variable if the
@@ -343,21 +352,31 @@ All variables are defined in [`.env.example`](./.env.example).
 ### Schema overview
 
 - **`prodotti`** — product catalog: model name, category, gaming platform, average
-  purchase/sale price, barcode, photo.
+  purchase/sale price, barcode, photo. Category is free text; suggestions come from `categorie`.
 - **`articoli`** — individual physical items bought (and possibly sold), linked to a
   `prodotto`. Tracks purchase date/cost/source, status (`acquistato` / `in vendita` /
-  `venduto` / `consegnato`), sale date/price/platform/fees/shipping, destination and free-form
-  notes. The `profitto` column is a **generated/stored column**:
+  `venduto` / `consegnato`), sale date/price/platform/fees/shipping, destination country
+  (`paese_vendita` → `paesi`), free-form notes, and optional `archiviato_at` (hidden from the
+  Articoli list when set; still included in KPI / monthly / Vendite UE totals). The `profitto`
+  column is a **generated/stored column**:
   `prezzo_vendita - costo_acquisto - costo_spedizione - fee`, and stays `NULL` until the item is
   actually sold — an unsold item must not read as being at a loss.
-- **`impostazioni`** — generic key/value store for app settings.
+- **`paesi`** — configurable sale countries (ISO alpha-2 code, display name, EU flag, active,
+  order). Seeded with the 27 EU members plus `US` (extra-EU). `articoli.paese_vendita` references
+  this table (FK, ON DELETE RESTRICT).
+- **`categorie`** — configurable product categories (name, active, order). Seeded with
+  Videogiochi / Console / Controller / Accessori; managed from Settings.
+- **`canali`** — configurable sale platforms, purchase sources and couriers.
+- **`impostazioni`** — generic key/value store for app settings (includes `paese_origine`, the
+  home country used for Italia/Estero and Vendite UE grouping; default `IT`).
 - **`utenti_autorizzati`** — the access allowlist: one row per authorized email address.
-- **`v_kpi`, `v_vendite_mensili`, `v_distribuzione_*`** (views) — everything the dashboard shows,
-  aggregated in SQL. Not an optimisation detail: PostgREST caps a range-less select at 1000 rows
-  **silently**, so summing rows in the application under-reported every KPI once the inventory
-  passed a thousand items. Aggregating in the database removes that failure mode and keeps the
-  dashboard's cost independent of inventory size. All views use `security_invoker = true`, so they
-  apply the caller's RLS rather than the owner's.
+- **`v_kpi`, `v_vendite_mensili`, `v_distribuzione_*`** (views) and period-filtered dashboard
+  functions — everything the dashboard shows, aggregated in SQL. Not an optimisation detail:
+  PostgREST caps a range-less select at 1000 rows **silently**, so summing rows in the application
+  under-reported every KPI once the inventory passed a thousand items. Aggregating in the database
+  removes that failure mode and keeps the dashboard's cost independent of inventory size. All
+  views use `security_invoker = true`, so they apply the caller's RLS rather than the owner's.
+  Monthly rows include cost of goods, fees and shipping totals.
 
 ## Authentication
 
@@ -409,11 +428,13 @@ src/
   app/
     (dashboard)/
       layout.tsx           # auth gate + sidebar/topbar shell
-      page.tsx             # analytics dashboard (KPIs, charts, monthly table)
-      articoli/            # items table + filters, sale dialog, state actions
+      page.tsx             # analytics dashboard (KPIs, charts, monthly table + Dettaglio)
+      actions.ts           # dashboard server actions (e.g. load month sales page)
+      articoli/            # items table + filters, sale dialog, state/archive/delete actions
       catalogo/            # product catalog, searchable and paginated
       inserimento/         # new purchase entry form + server action
-      impostazioni/        # account + integration status
+      impostazioni/        # account, integrations, canali/paesi/categorie managers
+      vendite-ue/          # EU sales by destination country (home country from settings)
     login/                 # magic-link login page, form and server actions
     auth/
       confirm/route.ts     # magic-link landing: token_hash or PKCE code → session
@@ -423,32 +444,41 @@ src/
   components/
     dashboard/             # sidebar, topbar, user menu, KPI card, chart card, empty state
       charts/              # Recharts components (monthly combo chart, distribution donut)
+      canali-manager.tsx   # Settings: platforms / sources / couriers
+      paesi-manager.tsx    # Settings: sale countries + home country
+      categorie-manager.tsx# Settings: product categories
+      dettaglio-mese.tsx   # per-month sold-item detail dialog
+      filtro-periodo.tsx   # dashboard date range filter
     ui/                    # shadcn/ui components
   lib/
     validazione.ts         # pure FormData parsing/validation, shared by the server actions
     mock-data.ts           # deterministic fixtures, used by tests and by the seed script
     format.ts              # currency/date formatting (it-IT locale)
+    import-incrementale.ts # incremental CSV re-import classification (pure)
     data/
       queries.ts           # data access layer: all reads, under RLS
       mappers.ts           # Postgres rows → domain types
+      periodo.ts           # dashboard period parsing helpers
     supabase/
       client.ts            # browser client
       server.ts            # server client + service-role client
       proxy.ts             # session refresh logic used by src/proxy.ts
   types/
-    index.ts               # Prodotto, Articolo, VenditaMensile, etc.
+    index.ts               # Prodotto, Articolo, VenditaMensile, seed lists (PAESI_UE, …)
     database.ts            # generated Postgres types
 scripts/
   seed.ts                  # catalog seeding (service role, local use only)
   import-csv.ts            # spreadsheet import (service role, local use only)
 supabase/
-  migrations/              # apply in order
+  migrations/              # apply in order (0001 … 0017)
     0001_init.sql          # tables, indexes, RLS, monthly view
     0002_auth_allowlist.sql# utenti_autorizzati + email-based RLS policies
-    0003_articoli_note.sql # per-item notes column
-    0004_ricalcola_prezzi_medi.sql # admin function to refresh catalog averages
-    0005_viste_dashboard.sql       # KPI + distribution views, list index
-    0006_rls_initplan.sql          # per-row re-evaluation fix in the allowlist policy
+    …
+    0013_canali_configurabili.sql
+    0014_paesi_configurabili.sql   # paesi + paese_origine setting
+    0015_categorie_configurabili.sql
+    0016_vendite_mensili_dettaglio.sql  # monthly cost/fees/shipping columns
+    0017_articoli_archivio.sql     # articoli.archiviato_at
 ```
 
 ## Deployment

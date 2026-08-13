@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table";
 import { getVenditePerPaeseAnno } from "@/lib/data/queries";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { nomePaese } from "@/types";
 
 // Un valore singolo se minimo e massimo coincidono (nessuna lacuna, o lacuna
 // che non lascia comunque incertezza sul totale), un intervallo altrimenti.
@@ -41,7 +40,7 @@ export default async function VenditeUePage() {
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm text-muted-foreground">
-        Vendite per paese UE e anno solare, su venduto/consegnato. Non risente del filtro periodo
+        Vendite per paese e anno solare, su venduto/consegnato. Non risente del filtro periodo
         della dashboard: è per definizione uno storico per anno solare. Per l&apos;interpretazione
         (quale totale rilevi per il tuo caso) rivolgiti al tuo consulente — qui trovi solo i numeri.
       </p>
@@ -67,8 +66,8 @@ export default async function VenditeUePage() {
                 </TableHeader>
                 <TableBody>
                   {anno.righe.map((r) => (
-                    <TableRow key={r.paese}>
-                      <TableCell className="font-medium">{nomePaese(r.paese as string)}</TableCell>
+                    <TableRow key={`${r.paese}-${r.destinazione ?? ""}`}>
+                      <TableCell className="font-medium">{r.nome ?? r.paese}</TableCell>
                       <TableCell className="text-right font-mono-num">
                         {formatNumber(r.numeroVendite)}
                       </TableCell>
@@ -80,6 +79,21 @@ export default async function VenditeUePage() {
                       </TableCell>
                     </TableRow>
                   ))}
+
+                  {anno.extraUe.numeroVendite > 0 && (
+                    <TableRow className="bg-muted/40 font-medium">
+                      <TableCell>Extra UE</TableCell>
+                      <TableCell className="text-right font-mono-num">
+                        {formatNumber(anno.extraUe.numeroVendite)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono-num">
+                        {formatCurrency(anno.extraUe.totaleVendite)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono-num">
+                        {formatCurrency(anno.extraUe.profittoTotale)}
+                      </TableCell>
+                    </TableRow>
+                  )}
 
                   {/* Vendite certamente estere ma senza paese assegnato
                       (destinazione = 'Estero', paese_vendita NULL): manca solo
@@ -155,7 +169,7 @@ export default async function VenditeUePage() {
                           Totale fuori Italia — PARZIALE
                         </span>
                       ) : (
-                        "Totale UE (esclusa Italia)"
+                        `Totale UE (esclusa ${anno.nomeOrigine})`
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono-num">
@@ -180,10 +194,10 @@ export default async function VenditeUePage() {
 
             {incompleto && (
               <p className="mt-2 text-xs text-amber-800 dark:text-amber-300">
-                Intervallo, non stima: <strong>minimo certo</strong> = paesi noti sopra + vendite
-                &quot;Estero, paese non assegnato&quot; (sono comunque estere, solo il paese manca).{" "}
-                <strong>Massimo possibile</strong> = minimo + vendite a destinazione sconosciuta
-                (potrebbero essere italiane o estere).
+                Intervallo, non stima: <strong>minimo certo</strong> = Totale UE (esclusa{" "}
+                {anno.nomeOrigine}) + Extra UE + vendite &quot;Estero, paese non assegnato&quot;
+                (sono comunque estere, solo il paese manca). <strong>Massimo possibile</strong> =
+                minimo + vendite a destinazione sconosciuta (potrebbero essere italiane o estere).
               </p>
             )}
 

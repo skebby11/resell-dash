@@ -1,7 +1,13 @@
-// Le liste sottostanti sono i valori *noti*, usati per popolare i form e le
-// legende. Non sono vincoli: le colonne corrispondenti su Postgres sono `text`
-// libero (nessun enum), quindi i tipi di dominio più sotto usano `string` per
-// non mentire su cosa può realmente arrivare dal database.
+// Le liste sottostanti sono i valori *noti* (seed e mock). Non sono vincoli:
+// le colonne corrispondenti su Postgres sono `text` libero (nessun enum),
+// quindi i tipi di dominio più sotto usano `string` per non mentire su cosa
+// può realmente arrivare dal database.
+//
+// Categorie NON sono più lette da qui dai form (0015_categorie_configurabili):
+// sono per-installazione, in tabella `categorie`, gestibili da Impostazioni.
+// Questa lista sopravvive solo come (a) il seed della migration — deve restare
+// identica ai valori inseriti lì — e (b) valori di esempio per i dati mock
+// (src/lib/mock-data.ts).
 export const CATEGORIE = ["Videogiochi", "Console", "Controller", "Accessori"] as const;
 // Piattaforme di vendita, fonti di acquisto e spedizionieri NON sono più letti
 // da qui dai form (0013_canali_configurabili): sono per-installazione, in
@@ -54,13 +60,40 @@ export interface Canale {
   conteggioArticoli: number;
 }
 
+/** Un paese configurabile, con quanti articoli storici usano ancora il suo codice. */
+export interface Paese {
+  codice: string;
+  nome: string;
+  ue: boolean;
+  attivo: boolean;
+  ordine: number;
+  /** Articoli con `paese_vendita` uguale a `codice` (indipendentemente da questo paese essendo attivo o meno). */
+  conteggioArticoli: number;
+}
+
+/** Una categoria prodotto configurabile, con quanti modelli usano ancora il suo nome. */
+export interface Categoria {
+  id: string;
+  nome: string;
+  attivo: boolean;
+  ordine: number;
+  /** Prodotti la cui `categoria` corrisponde a `nome` (indipendentemente da questa riga essendo attiva o meno). */
+  conteggioProdotti: number;
+}
+
 /**
  * I 27 stati membri UE (codice ISO 3166-1 alpha-2 → nome italiano), verificati
  * e non a memoria: il Regno Unito non ne fa più parte da Brexit; Norvegia,
  * Svizzera e Islanda non sono mai state membri UE pur essendo nello spazio
- * economico/Schengen. Stesso elenco imposto dal CHECK constraint su
- * `articoli.paese_vendita` (0009_paese_vendita.sql): se cambia l'uno deve
- * cambiare anche l'altro.
+ * economico/Schengen.
+ *
+ * Non è più l'unica fonte di verità né il vincolo su `articoli.paese_vendita`
+ * (il CHECK di 0009 è caduto in 0014_paesi_configurabili): i paesi sono
+ * per-installazione, in tabella `paesi`, gestibili da Impostazioni. Questa
+ * lista sopravvive solo come (a) il seed della migration — deve restare
+ * identica ai valori inseriti lì, più US aggiunto a parte — e (b) valori di
+ * esempio per i dati mock. `nomePaese` resta un fallback di etichetta se un
+ * codice non è nella mappa caricata a runtime.
  */
 export const PAESI_UE = [
   { codice: "AT", nome: "Austria" },
@@ -96,7 +129,7 @@ export type CodicePaeseUe = (typeof PAESI_UE)[number]["codice"];
 
 const MAPPA_PAESI_UE = new Map<string, string>(PAESI_UE.map((p) => [p.codice, p.nome]));
 
-/** Nome italiano di un codice paese UE, o il codice stesso se non riconosciuto. */
+/** Nome italiano di un codice paese noto nel seed UE, o il codice stesso se non riconosciuto. Fallback: a runtime le etichette arrivano da `paesi`. */
 export function nomePaese(codice: string): string {
   return MAPPA_PAESI_UE.get(codice) ?? codice;
 }
@@ -114,7 +147,6 @@ export const PIATTAFORME_GIOCO = [
   "PC",
 ] as const;
 
-export type Categoria = (typeof CATEGORIE)[number];
 export type PiattaformaVendita = (typeof PIATTAFORME_VENDITA)[number];
 export type FonteAcquisto = (typeof FONTI_ACQUISTO)[number];
 export type Spedizioniere = (typeof SPEDIZIONIERI)[number];
@@ -163,12 +195,15 @@ export interface Articolo {
   fee: number | null;
   costoSpedizione: number | null;
   destinazione: string | null;
-  /** Codice ISO paese UE, noto solo se inserito al momento della vendita. NULL = paese ignoto. */
+  /** Codice ISO paese, noto solo se inserito al momento della vendita. NULL = paese ignoto. */
   paeseVendita: string | null;
   spedizioniere: string | null;
 
   /** Note sul singolo esemplare: stato estetico, accessori, difetti. */
   note: string | null;
+
+  /** Non null = nascosto dalla lista Articoli di default. Resta in KPI e Vendite UE. */
+  archiviatoAt: string | null;
 
   prodottoSponsorizzato: boolean;
   venditaPostOfferta: boolean;
@@ -183,6 +218,9 @@ export interface VenditaMensile {
   numeroVendite: number;
   totaleVendite: number;
   prezzoMedio: number;
+  costoMerci: number;
+  feeTotali: number;
+  spedizioneTotale: number;
   profitto: number;
 }
 
@@ -195,6 +233,11 @@ export interface DistribuzioneVoce {
 export interface VenditaPerPaese {
   /** Codice ISO, o null per il gruppo "senza paese noto". */
   paese: string | null;
+  /** Nome da `paesi`; assente sulle righe "senza paese". */
+  nome?: string;
+  /** Destinazione della riga vista (`Italia`/`Estero`/null): serve a distinguere
+   * due aggregati con lo stesso codice paese dopo un cambio di origine. */
+  destinazione?: string | null;
   numeroVendite: number;
   totaleVendite: number;
   profittoTotale: number;
@@ -219,18 +262,22 @@ export interface SubtotaleVendite {
  */
 export interface VenditaPerPaeseAnno {
   anno: number;
+  /** Nome configurato del paese di origine, per l'etichetta del totale UE. */
+  nomeOrigine: string;
   righe: VenditaPerPaese[];
   senzaPaeseEstero: VenditaPerPaese;
   senzaPaeseIgnota: VenditaPerPaese;
-  /** Somma di tutti i paesi UE tranne l'Italia (righe con paese noto e diverso da IT). */
+  /** Somma dei paesi UE tranne il paese di origine (righe con `ue` e codice ≠ origine). */
   totaleUeEsclusaItalia: SubtotaleVendite;
+  /** Somma delle righe con paese noto, `ue === false` e codice ≠ origine. */
+  extraUe: SubtotaleVendite;
   /**
    * Venduto fuori Italia come intervallo, non come singolo numero: un totale
    * unico o è "tutto certo" (nessuna lacuna, minimo = massimo) o nasconde
-   * quanto già si sa. `minimo` = totaleUeEsclusaItalia + senzaPaeseEstero
-   * (certamente estero). `massimo` = minimo + senzaPaeseIgnota (potrebbe
-   * esserlo). `incompleto` = esiste almeno una vendita senza paese: quando è
-   * false, minimo e massimo coincidono e la UI mostra un totale pulito.
+   * quanto già si sa. `minimo` = totaleUeEsclusaItalia + extraUe +
+   * senzaPaeseEstero (certamente estero). `massimo` = minimo + senzaPaeseIgnota
+   * (potrebbe esserlo). `incompleto` = esiste almeno una vendita senza paese:
+   * quando è false, minimo e massimo coincidono e la UI mostra un totale pulito.
    */
   totaleFuoriItalia: {
     minimo: SubtotaleVendite;
