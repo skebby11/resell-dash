@@ -319,6 +319,7 @@ export async function getVenditePerPaeseAnno(): Promise<VenditaPerPaeseAnno[]> {
         .map((r) => ({
           paese: r.paese,
           nome: mappaNomi.get(r.paese) ?? r.paese,
+          destinazione: r.destinazione,
           numeroVendite: num(r.numero_vendite),
           totaleVendite: num(r.totale_vendite),
           profittoTotale: num(r.profitto_totale),
@@ -352,7 +353,9 @@ export async function getVenditePerPaeseAnno(): Promise<VenditaPerPaeseAnno[]> {
       const totaleUeEsclusaItalia = sommaRighe(
         righe.filter((r) => r.paese != null && ueSet.has(r.paese) && r.paese !== origine)
       );
-      const extraUe = sommaRighe(righe.filter((r) => r.paese != null && !ueSet.has(r.paese)));
+      const extraUe = sommaRighe(
+        righe.filter((r) => r.paese != null && !ueSet.has(r.paese) && r.paese !== origine)
+      );
 
       // Intervallo minimo certo — massimo possibile del venduto fuori Italia:
       // il minimo aggiunge le vendite 'Estero' senza paese (certe, manca solo

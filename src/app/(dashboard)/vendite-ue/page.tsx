@@ -66,7 +66,7 @@ export default async function VenditeUePage() {
                 </TableHeader>
                 <TableBody>
                   {anno.righe.map((r) => (
-                    <TableRow key={r.paese}>
+                    <TableRow key={`${r.paese}-${r.destinazione ?? ""}`}>
                       <TableCell className="font-medium">{r.nome ?? r.paese}</TableCell>
                       <TableCell className="text-right font-mono-num">
                         {formatNumber(r.numeroVendite)}
@@ -194,10 +194,10 @@ export default async function VenditeUePage() {
 
             {incompleto && (
               <p className="mt-2 text-xs text-amber-800 dark:text-amber-300">
-                Intervallo, non stima: <strong>minimo certo</strong> = paesi noti sopra + vendite
-                &quot;Estero, paese non assegnato&quot; (sono comunque estere, solo il paese manca).{" "}
-                <strong>Massimo possibile</strong> = minimo + vendite a destinazione sconosciuta
-                (potrebbero essere italiane o estere).
+                Intervallo, non stima: <strong>minimo certo</strong> = Totale UE (esclusa{" "}
+                {anno.nomeOrigine}) + Extra UE + vendite &quot;Estero, paese non assegnato&quot;
+                (sono comunque estere, solo il paese manca). <strong>Massimo possibile</strong> =
+                minimo + vendite a destinazione sconosciuta (potrebbero essere italiane o estere).
               </p>
             )}
 

@@ -17,6 +17,7 @@ export interface StatoVendita {
 function rivalidaPagine() {
   revalidatePath("/");
   revalidatePath("/articoli");
+  revalidatePath("/vendite-ue");
 }
 
 /**

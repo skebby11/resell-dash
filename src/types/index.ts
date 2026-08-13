@@ -214,6 +214,9 @@ export interface VenditaPerPaese {
   paese: string | null;
   /** Nome da `paesi`; assente sulle righe "senza paese". */
   nome?: string;
+  /** Destinazione della riga vista (`Italia`/`Estero`/null): serve a distinguere
+   * due aggregati con lo stesso codice paese dopo un cambio di origine. */
+  destinazione?: string | null;
   numeroVendite: number;
   totaleVendite: number;
   profittoTotale: number;
@@ -245,7 +248,7 @@ export interface VenditaPerPaeseAnno {
   senzaPaeseIgnota: VenditaPerPaese;
   /** Somma dei paesi UE tranne il paese di origine (righe con `ue` e codice ≠ origine). */
   totaleUeEsclusaItalia: SubtotaleVendite;
-  /** Somma delle righe con paese noto e `ue === false` (es. Stati Uniti). */
+  /** Somma delle righe con paese noto, `ue === false` e codice ≠ origine. */
   extraUe: SubtotaleVendite;
   /**
    * Venduto fuori Italia come intervallo, non come singolo numero: un totale
