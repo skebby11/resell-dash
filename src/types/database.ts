@@ -88,6 +88,13 @@ export type Database = {
             referencedRelation: "prodotti";
             referencedColumns: ["id"];
           },
+          {
+            foreignKeyName: "articoli_paese_vendita_fkey";
+            columns: ["paese_vendita"];
+            isOneToOne: false;
+            referencedRelation: "paesi";
+            referencedColumns: ["codice"];
+          },
         ];
       };
       // Piattaforme di vendita, fonti di acquisto e spedizionieri configurabili
@@ -124,6 +131,35 @@ export type Database = {
         Row: { chiave: string; created_at: string; id: string; valore: Json | null };
         Insert: { chiave: string; created_at?: string; id?: string; valore?: Json | null };
         Update: { chiave?: string; created_at?: string; id?: string; valore?: Json | null };
+        Relationships: [];
+      };
+      // Paesi di vendita configurabili (0014_paesi_configurabili): il codice
+      // ISO è PK immutabile; `ue` non è inferito dal codice.
+      paesi: {
+        Row: {
+          attivo: boolean;
+          codice: string;
+          created_at: string;
+          nome: string;
+          ordine: number;
+          ue: boolean;
+        };
+        Insert: {
+          attivo?: boolean;
+          codice: string;
+          created_at?: string;
+          nome: string;
+          ordine?: number;
+          ue?: boolean;
+        };
+        Update: {
+          attivo?: boolean;
+          codice?: string;
+          created_at?: string;
+          nome?: string;
+          ordine?: number;
+          ue?: boolean;
+        };
         Relationships: [];
       };
       prodotti: {
@@ -199,6 +235,12 @@ export type Database = {
       // usano ciascun canale prima di disattivarlo o rinominarlo.
       v_conteggio_canali: {
         Row: { conteggio: number | null; nome: string | null; tipo: string | null };
+        Relationships: [];
+      };
+      // Conteggio articoli per codice paese di vendita (0014): a supporto
+      // della pagina Impostazioni, prima di cancellare o disattivare un paese.
+      v_conteggio_paesi: {
+        Row: { codice: string | null; conteggio: number | null };
         Relationships: [];
       };
       v_distribuzione_categoria: {

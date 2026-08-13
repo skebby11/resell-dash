@@ -54,13 +54,30 @@ export interface Canale {
   conteggioArticoli: number;
 }
 
+/** Un paese configurabile, con quanti articoli storici usano ancora il suo codice. */
+export interface Paese {
+  codice: string;
+  nome: string;
+  ue: boolean;
+  attivo: boolean;
+  ordine: number;
+  /** Articoli con `paese_vendita` uguale a `codice` (indipendentemente da questo paese essendo attivo o meno). */
+  conteggioArticoli: number;
+}
+
 /**
  * I 27 stati membri UE (codice ISO 3166-1 alpha-2 → nome italiano), verificati
  * e non a memoria: il Regno Unito non ne fa più parte da Brexit; Norvegia,
  * Svizzera e Islanda non sono mai state membri UE pur essendo nello spazio
- * economico/Schengen. Stesso elenco imposto dal CHECK constraint su
- * `articoli.paese_vendita` (0009_paese_vendita.sql): se cambia l'uno deve
- * cambiare anche l'altro.
+ * economico/Schengen.
+ *
+ * Non è più l'unica fonte di verità né il vincolo su `articoli.paese_vendita`
+ * (il CHECK di 0009 è caduto in 0014_paesi_configurabili): i paesi sono
+ * per-installazione, in tabella `paesi`, gestibili da Impostazioni. Questa
+ * lista sopravvive solo come (a) il seed della migration — deve restare
+ * identica ai valori inseriti lì, più US aggiunto a parte — e (b) valori di
+ * esempio per i dati mock. `nomePaese` resta un fallback di etichetta se un
+ * codice non è nella mappa caricata a runtime.
  */
 export const PAESI_UE = [
   { codice: "AT", nome: "Austria" },
@@ -96,7 +113,7 @@ export type CodicePaeseUe = (typeof PAESI_UE)[number]["codice"];
 
 const MAPPA_PAESI_UE = new Map<string, string>(PAESI_UE.map((p) => [p.codice, p.nome]));
 
-/** Nome italiano di un codice paese UE, o il codice stesso se non riconosciuto. */
+/** Nome italiano di un codice paese noto nel seed UE, o il codice stesso se non riconosciuto. Fallback: a runtime le etichette arrivano da `paesi`. */
 export function nomePaese(codice: string): string {
   return MAPPA_PAESI_UE.get(codice) ?? codice;
 }
