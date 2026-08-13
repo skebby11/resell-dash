@@ -212,6 +212,8 @@ export interface DistribuzioneVoce {
 export interface VenditaPerPaese {
   /** Codice ISO, o null per il gruppo "senza paese noto". */
   paese: string | null;
+  /** Nome da `paesi`; assente sulle righe "senza paese". */
+  nome?: string;
   numeroVendite: number;
   totaleVendite: number;
   profittoTotale: number;
@@ -236,18 +238,22 @@ export interface SubtotaleVendite {
  */
 export interface VenditaPerPaeseAnno {
   anno: number;
+  /** Nome configurato del paese di origine, per l'etichetta del totale UE. */
+  nomeOrigine: string;
   righe: VenditaPerPaese[];
   senzaPaeseEstero: VenditaPerPaese;
   senzaPaeseIgnota: VenditaPerPaese;
-  /** Somma di tutti i paesi UE tranne l'Italia (righe con paese noto e diverso da IT). */
+  /** Somma dei paesi UE tranne il paese di origine (righe con `ue` e codice ≠ origine). */
   totaleUeEsclusaItalia: SubtotaleVendite;
+  /** Somma delle righe con paese noto e `ue === false` (es. Stati Uniti). */
+  extraUe: SubtotaleVendite;
   /**
    * Venduto fuori Italia come intervallo, non come singolo numero: un totale
    * unico o è "tutto certo" (nessuna lacuna, minimo = massimo) o nasconde
-   * quanto già si sa. `minimo` = totaleUeEsclusaItalia + senzaPaeseEstero
-   * (certamente estero). `massimo` = minimo + senzaPaeseIgnota (potrebbe
-   * esserlo). `incompleto` = esiste almeno una vendita senza paese: quando è
-   * false, minimo e massimo coincidono e la UI mostra un totale pulito.
+   * quanto già si sa. `minimo` = totaleUeEsclusaItalia + extraUe +
+   * senzaPaeseEstero (certamente estero). `massimo` = minimo + senzaPaeseIgnota
+   * (potrebbe esserlo). `incompleto` = esiste almeno una vendita senza paese:
+   * quando è false, minimo e massimo coincidono e la UI mostra un totale pulito.
    */
   totaleFuoriItalia: {
     minimo: SubtotaleVendite;

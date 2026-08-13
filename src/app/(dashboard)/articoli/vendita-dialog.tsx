@@ -25,11 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/format";
-import { DESTINAZIONI, PAESI_UE, type Articolo } from "@/types";
-
-// Il selettore paese esclude l'Italia: quando la destinazione è Italia il
-// paese è sempre 'IT' e lo impone il server, non c'è scelta da fare qui.
-const PAESI_ESTERI = PAESI_UE.filter((p) => p.codice !== "IT");
+import { DESTINAZIONI, type Articolo, type Paese } from "@/types";
 import { registraVendita, type StatoVendita } from "./actions";
 
 function BottoneSalva({ modifica }: { modifica: boolean }) {
@@ -52,12 +48,16 @@ function CampiVendita({
   campi,
   piattaformeVendita,
   spedizionieri,
+  paesi,
+  paeseOrigine,
 }: {
   articolo: Articolo;
   campi: StatoVendita["campi"];
   /** Canali attivi letti dal database (0013_canali_configurabili), non più costanti. */
   piattaformeVendita: string[];
   spedizionieri: string[];
+  paesi: Paese[];
+  paeseOrigine: string;
 }) {
   const [prezzo, setPrezzo] = useState(numInput(articolo.prezzoVendita));
   const [fee, setFee] = useState(numInput(articolo.fee));
@@ -70,6 +70,29 @@ function CampiVendita({
   // si parte da quella invece di sovrascriverla.
   const [destinazione, setDestinazione] = useState(articolo.destinazione ?? "Italia");
   const [paeseVendita, setPaeseVendita] = useState(articolo.paeseVendita ?? "");
+
+  // Selettore estero: attivi diversi dall'origine. Se si sta modificando una
+  // vendita il cui paese è stato disattivato, lo teniamo in lista per non
+  // perdere il valore già salvato.
+  const paesiEsteri = paesi.filter((p) => p.attivo && p.codice !== paeseOrigine);
+  const codiceStorico = articolo.paeseVendita;
+  if (
+    codiceStorico &&
+    codiceStorico !== paeseOrigine &&
+    !paesiEsteri.some((p) => p.codice === codiceStorico)
+  ) {
+    const storico = paesi.find((p) => p.codice === codiceStorico);
+    paesiEsteri.push(
+      storico ?? {
+        codice: codiceStorico,
+        nome: codiceStorico,
+        ue: false,
+        attivo: false,
+        ordine: Number.MAX_SAFE_INTEGER,
+        conteggioArticoli: 0,
+      }
+    );
+  }
 
   // Il foglio di calcolo ragionava in percentuale ("eBay 5%"), il database
   // memorizza un importo. Mostrare la percentuale implicita evita di dover
@@ -87,7 +110,7 @@ function CampiVendita({
       <input type="hidden" name="stato" value={stato} />
       <input type="hidden" name="destinazione" value={destinazione} />
       {/* Il paese viaggia solo quando la destinazione è Estero: per l'Italia
-          lo impone il server (sempre 'IT'), qui non c'è nulla da mandare. */}
+          lo impone il server (paese di origine), qui non c'è nulla da mandare. */}
       {destinazione === "Estero" && (
         <input type="hidden" name="paese_vendita" value={paeseVendita} />
       )}
@@ -237,7 +260,7 @@ function CampiVendita({
           si corregge da /vendite-ue → /articoli. */}
       {destinazione === "Estero" && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="v-paese">Paese UE</Label>
+          <Label htmlFor="v-paese">Paese</Label>
           <Select value={paeseVendita} onValueChange={(v) => setPaeseVendita(v ?? "")}>
             <SelectTrigger
               id="v-paese"
@@ -247,7 +270,7 @@ function CampiVendita({
               <SelectValue placeholder="Non specificato — da correggere in seguito" />
             </SelectTrigger>
             <SelectContent>
-              {PAESI_ESTERI.map((p) => (
+              {paesiEsteri.map((p) => (
                 <SelectItem key={p.codice} value={p.codice}>
                   {p.nome}
                 </SelectItem>
@@ -283,10 +306,14 @@ export function VenditaDialog({
   articolo,
   piattaformeVendita,
   spedizionieri,
+  paesi,
+  paeseOrigine,
 }: {
   articolo: Articolo;
   piattaformeVendita: string[];
   spedizionieri: string[];
+  paesi: Paese[];
+  paeseOrigine: string;
 }) {
   const [stato, action] = useActionState<StatoVendita, FormData>(registraVendita, { seq: 0 });
   const modifica = articolo.stato === "venduto" || articolo.stato === "consegnato";
@@ -318,6 +345,8 @@ export function VenditaDialog({
             campi={stato.campi}
             piattaformeVendita={piattaformeVendita}
             spedizionieri={spedizionieri}
+            paesi={paesi}
+            paeseOrigine={paeseOrigine}
           />
           <DialogFooter>
             <BottoneSalva modifica={modifica} />

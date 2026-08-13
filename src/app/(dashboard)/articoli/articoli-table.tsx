@@ -10,16 +10,16 @@ import {
 } from "@/components/ui/table";
 import { StatoBadge } from "@/components/dashboard/stato-badge";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { nomePaese, type Articolo } from "@/types";
+import type { Articolo, Paese } from "@/types";
 import { AzioniStato } from "./azioni-stato";
 import { VenditaDialog } from "./vendita-dialog";
 
 const VENDUTO_STATI = new Set(["venduto", "consegnato"]);
 
 /** Testo della colonna Paese: distingue "non ancora venduto" da "venduto ma senza paese noto". */
-function testoPaese(a: Articolo): { testo: string; lacuna: boolean } {
+function testoPaese(a: Articolo, nomi: Map<string, string>): { testo: string; lacuna: boolean } {
   if (!VENDUTO_STATI.has(a.stato)) return { testo: "—", lacuna: false };
-  if (a.paeseVendita) return { testo: nomePaese(a.paeseVendita), lacuna: false };
+  if (a.paeseVendita) return { testo: nomi.get(a.paeseVendita) ?? a.paeseVendita, lacuna: false };
   return { testo: a.destinazione === "Estero" ? "Estero (?)" : "?", lacuna: true };
 }
 
@@ -34,12 +34,17 @@ export function ArticoliTable({
   articoli,
   piattaformeVendita,
   spedizionieri,
+  paesi,
+  paeseOrigine,
 }: {
   articoli: Articolo[];
   /** Canali attivi letti dal database (0013_canali_configurabili). */
   piattaformeVendita: string[];
   spedizionieri: string[];
+  paesi: Paese[];
+  paeseOrigine: string;
 }) {
+  const nomiPaesi = new Map(paesi.map((p) => [p.codice, p.nome]));
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm">
       <div className="overflow-x-auto">
@@ -97,10 +102,12 @@ export function ArticoliTable({
                 </TableCell>
                 <TableCell
                   className={
-                    testoPaese(a).lacuna ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+                    testoPaese(a, nomiPaesi).lacuna
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-muted-foreground"
                   }
                 >
-                  {testoPaese(a).testo}
+                  {testoPaese(a, nomiPaesi).testo}
                 </TableCell>
                 <TableCell
                   className={`text-right font-mono-num ${
@@ -115,6 +122,8 @@ export function ArticoliTable({
                       articolo={a}
                       piattaformeVendita={piattaformeVendita}
                       spedizionieri={spedizionieri}
+                      paesi={paesi}
+                      paeseOrigine={paeseOrigine}
                     />
                     <AzioniStato articolo={a} />
                   </div>

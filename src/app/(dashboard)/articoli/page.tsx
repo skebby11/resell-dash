@@ -4,6 +4,8 @@ import {
   ARTICOLI_PER_PAGINA,
   getArticoliPaginati,
   getCanaliAttivi,
+  getPaeseOrigine,
+  getPaesi,
   normalizzaPagina,
   normalizzaStato,
 } from "@/lib/data/queries";
@@ -27,11 +29,14 @@ export default async function ArticoliPage({
   // `pagina` dal risultato e non dal parametro: una richiesta fuori intervallo
   // viene riportata all'ultima pagina valida, e l'indicatore deve dire dove
   // siamo davvero.
-  const [{ righe, totale, pagina }, piattaformeVendita, spedizionieri] = await Promise.all([
-    getArticoliPaginati({ stato, q, senzaPaese, pagina: normalizzaPagina(params.p) }),
-    getCanaliAttivi("piattaforma_vendita"),
-    getCanaliAttivi("spedizioniere"),
-  ]);
+  const [{ righe, totale, pagina }, piattaformeVendita, spedizionieri, paesi, paeseOrigine] =
+    await Promise.all([
+      getArticoliPaginati({ stato, q, senzaPaese, pagina: normalizzaPagina(params.p) }),
+      getCanaliAttivi("piattaforma_vendita"),
+      getCanaliAttivi("spedizioniere"),
+      getPaesi(),
+      getPaeseOrigine(),
+    ]);
 
   // Nessun filtro attivo e zero risultati: il magazzino è davvero vuoto, non è
   // una ricerca senza esiti.
@@ -62,6 +67,8 @@ export default async function ArticoliPage({
         articoli={righe}
         piattaformeVendita={piattaformeVendita}
         spedizionieri={spedizionieri}
+        paesi={paesi}
+        paeseOrigine={paeseOrigine}
       />
       <Paginazione
         pagina={pagina}

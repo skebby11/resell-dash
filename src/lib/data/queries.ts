@@ -273,33 +273,38 @@ function etichettaMese(mese: string): string {
 }
 
 /**
- * Vendite per paese UE e anno solare, per l'obbligo di legge di sapere quanto
- * si è venduto in ciascun paese. Non è influenzata dal filtro periodo della
+ * Vendite per paese e anno solare, per l'obbligo di legge di sapere quanto
+ * si è venduto in ciascun paese UE. Non è influenzata dal filtro periodo della
  * dashboard: è per definizione uno storico per anno solare.
  *
  * `v_vendite_per_paese_anno` è già completamente aggregata (al più qualche
- * decina di righe per anno): il subtotale "UE esclusa Italia" si ricalcola
- * qui sulle righe già aggregate, non sulle righe grezze di `articoli` — non
- * è la lettura senza range che PostgREST tronca a 1000, ma una somma su un
- * risultato che lo è già.
+ * decina di righe per anno): i subtotali UE (esclusa l'origine) ed extra-UE
+ * si ricalcolano qui sulle righe già aggregate, non sulle righe grezze di
+ * `articoli` — non è la lettura senza range che PostgREST tronca a 1000, ma
+ * una somma su un risultato che lo è già.
  *
  * Il gruppo "senza paese" (paese null) arriva già sdoppiato per `destinazione`
  * dalla vista (0012): qui si trasforma in due sottototali (Estero certo /
  * destinazione ignota) e nell'intervallo minimo–massimo del venduto fuori
- * Italia, così la pagina non deve mai mostrare un "Totale UE" a zero quando
- * in realtà ci sono vendite estere non ancora attribuite a un paese.
+ * dal paese di origine, così la pagina non deve mai mostrare un "Totale UE"
+ * a zero quando in realtà ci sono vendite estere non ancora attribuite.
  */
 export async function getVenditePerPaeseAnno(): Promise<VenditaPerPaeseAnno[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("v_vendite_per_paese_anno")
-    .select("*")
-    .order("anno", { ascending: false });
-  if (error) erroreLettura("vendite per paese e anno", error.message);
+  const [vistaRes, paesi, origine] = await Promise.all([
+    supabase.from("v_vendite_per_paese_anno").select("*").order("anno", { ascending: false }),
+    getPaesi(),
+    getPaeseOrigine(),
+  ]);
+  if (vistaRes.error) erroreLettura("vendite per paese e anno", vistaRes.error.message);
+
+  const mappaNomi = new Map(paesi.map((p) => [p.codice, p.nome]));
+  const ueSet = new Set(paesi.filter((p) => p.ue).map((p) => p.codice));
+  const nomeOrigine = mappaNomi.get(origine) ?? origine;
 
   type RigaVista = Tables<"v_vendite_per_paese_anno">;
   const perAnno = new Map<number, RigaVista[]>();
-  for (const riga of data ?? []) {
+  for (const riga of vistaRes.data ?? []) {
     if (riga.anno == null) continue;
     const voci = perAnno.get(riga.anno) ?? [];
     voci.push(riga);
@@ -313,6 +318,7 @@ export async function getVenditePerPaeseAnno(): Promise<VenditaPerPaeseAnno[]> {
         .filter((r): r is RigaVista & { paese: string } => r.paese != null)
         .map((r) => ({
           paese: r.paese,
+          nome: mappaNomi.get(r.paese) ?? r.paese,
           numeroVendite: num(r.numero_vendite),
           totaleVendite: num(r.totale_vendite),
           profittoTotale: num(r.profitto_totale),
@@ -321,7 +327,7 @@ export async function getVenditePerPaeseAnno(): Promise<VenditaPerPaeseAnno[]> {
 
       // Il gruppo "senza paese" (paese null) si sdoppia per destinazione: due
       // lacune diverse, non una sola (0012_vendite_senza_paese_destinazione).
-      // 'Estero' = certamente fuori Italia, paese ignoto. NULL = non si sa
+      // 'Estero' = certamente fuori origine, paese ignoto. NULL = non si sa
       // nemmeno la destinazione.
       const rigaEstero = voci.find((r) => r.paese == null && r.destinazione === "Estero");
       const rigaIgnota = voci.find((r) => r.paese == null && r.destinazione == null);
@@ -338,12 +344,15 @@ export async function getVenditePerPaeseAnno(): Promise<VenditaPerPaeseAnno[]> {
         profittoTotale: num(rigaIgnota?.profitto_totale ?? 0),
       };
 
-      const ue = righe.filter((r) => r.paese !== "IT");
-      const totaleUeEsclusaItalia = {
-        numeroVendite: ue.reduce((s, r) => s + r.numeroVendite, 0),
-        totaleVendite: Math.round(ue.reduce((s, r) => s + r.totaleVendite, 0) * 100) / 100,
-        profittoTotale: Math.round(ue.reduce((s, r) => s + r.profittoTotale, 0) * 100) / 100,
-      };
+      const sommaRighe = (filtrate: typeof righe) => ({
+        numeroVendite: filtrate.reduce((s, r) => s + r.numeroVendite, 0),
+        totaleVendite: Math.round(filtrate.reduce((s, r) => s + r.totaleVendite, 0) * 100) / 100,
+        profittoTotale: Math.round(filtrate.reduce((s, r) => s + r.profittoTotale, 0) * 100) / 100,
+      });
+      const totaleUeEsclusaItalia = sommaRighe(
+        righe.filter((r) => r.paese != null && ueSet.has(r.paese) && r.paese !== origine)
+      );
+      const extraUe = sommaRighe(righe.filter((r) => r.paese != null && !ueSet.has(r.paese)));
 
       // Intervallo minimo certo — massimo possibile del venduto fuori Italia:
       // il minimo aggiunge le vendite 'Estero' senza paese (certe, manca solo
@@ -355,16 +364,18 @@ export async function getVenditePerPaeseAnno(): Promise<VenditaPerPaeseAnno[]> {
         totaleVendite: Math.round((a.totaleVendite + b.totaleVendite) * 100) / 100,
         profittoTotale: Math.round((a.profittoTotale + b.profittoTotale) * 100) / 100,
       });
-      const minimo = somma(totaleUeEsclusaItalia, senzaPaeseEstero);
+      const minimo = somma(somma(totaleUeEsclusaItalia, extraUe), senzaPaeseEstero);
       const massimo = somma(minimo, senzaPaeseIgnota);
       const incompleto = senzaPaeseEstero.numeroVendite + senzaPaeseIgnota.numeroVendite > 0;
 
       return {
         anno,
+        nomeOrigine,
         righe,
         senzaPaeseEstero,
         senzaPaeseIgnota,
         totaleUeEsclusaItalia,
+        extraUe,
         totaleFuoriItalia: { minimo, massimo, incompleto },
       };
     });

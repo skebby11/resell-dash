@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getContestoPaese } from "@/lib/data/queries";
 import { parseVendita, UUID_RE, type CampoVendita } from "@/lib/validazione";
 import { STATI_ARTICOLO, type StatoArticolo } from "@/types";
 
@@ -29,7 +30,8 @@ export async function registraVendita(
   formData: FormData
 ): Promise<StatoVendita> {
   const seq = stato.seq ?? 0;
-  const esito = parseVendita(formData);
+  const ctx = await getContestoPaese();
+  const esito = parseVendita(formData, ctx);
   if (!esito.ok) return { seq, campi: esito.campi, errore: esito.errore };
   const v = esito.valori;
 
