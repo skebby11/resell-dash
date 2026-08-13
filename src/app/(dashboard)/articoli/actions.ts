@@ -119,6 +119,9 @@ export async function annullaVendita(id: string): Promise<void> {
       spedizioniere: null,
       prodotto_sponsorizzato: false,
       vendita_post_offerta: false,
+      // Un invenduto non può restare in archivio: la lista Archivio è
+      // per i venduti, e senza questo clear l'articolo sparirebbe da entrambe.
+      archiviato_at: null,
     })
     .eq("id", id);
   if (error) throw new Error(error.message);

@@ -40,26 +40,24 @@ export default async function ArticoliPage({
       getPaeseOrigine(),
     ]);
 
-  // Nessun filtro attivo e zero risultati: il magazzino è davvero vuoto, non è
-  // una ricerca senza esiti. L'archivio vuoto è un caso diverso.
-  if (totale === 0 && !stato && !q && !senzaPaese && archivio !== "archivio") {
-    return (
-      <StatoVuoto
-        titolo="Magazzino vuoto"
-        descrizione="Nessun articolo registrato finora. Ogni acquisto inserito compare qui con il suo stato, dall'acquisto alla consegna."
-        azione={{ href: "/inserimento", label: "Registra un acquisto" }}
-      />
-    );
-  }
-
-  if (totale === 0 && !stato && !q && !senzaPaese && archivio === "archivio") {
+  // Lista di default vuota: i Filtri restano visibili, altrimenti Archivio
+  // sparisce quando ogni venduto è stato archiviato.
+  if (totale === 0 && !stato && !q && !senzaPaese) {
     return (
       <div className="flex flex-col gap-4">
         <Filtri stato={stato} q={q} senzaPaese={senzaPaese} archivio={inArchivio} />
-        <StatoVuoto
-          titolo="Nessun articolo in archivio"
-          descrizione="Gli articoli venduti che archivi scompaiono da questa lista, ma restano nei totali e in Vendite UE."
-        />
+        {archivio === "archivio" ? (
+          <StatoVuoto
+            titolo="Nessun articolo in archivio"
+            descrizione="Gli articoli venduti che archivi scompaiono da questa lista, ma restano nei totali e in Vendite UE."
+          />
+        ) : (
+          <StatoVuoto
+            titolo="Magazzino vuoto"
+            descrizione="Nessun articolo registrato finora. Ogni acquisto inserito compare qui con il suo stato, dall'acquisto alla consegna."
+            azione={{ href: "/inserimento", label: "Registra un acquisto" }}
+          />
+        )}
       </div>
     );
   }
