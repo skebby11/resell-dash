@@ -34,7 +34,7 @@ Four gaps in the current inventory workflow:
 |---|---|
 | Countries | New `paesi` table, managed in Impostazioni. Seed EU-27 (`ue = true`) + Stati Uniti (`US`, `ue = false`). |
 | Home country | `impostazioni.chiave = 'paese_origine'`, default `IT`. Destinazione `Italia` writes this code; Estero lists every *active* country except home. |
-| Country delete | Blocked while any `articoli.paese_vendita` equals that code. Rename updates matching `articoli` and the home-country setting if it pointed at the old code. |
+| Country delete | Blocked while any `articoli.paese_vendita` equals that code, and blocked while the code is `paese_origine`. **Code is immutable after insert**; only `nome`, `ue`, `attivo`, `ordine` change. |
 | Categories | New `categorie` table, managed in Impostazioni. `prodotti.categoria` stays free text (same pattern as `canali`). |
 | Category delete | Blocked while any `prodotti.categoria` equals that name (case-insensitive). Rename always updates matching products. |
 | Category seed | Current four names, same order. Owner will send a longer list before or during implementation; if it arrives, seed that list instead (and upsert any of the four already present after a previous seed). |
@@ -103,8 +103,8 @@ New “Paesi” section, same interaction model as Canali (`CanaliManager`):
 
 - List: flag/code, name, `UE` badge, article count, active toggle, up/down, rename, delete.
 - Add: ISO code (normalized to uppercase, exactly two A–Z), name, `ue` checkbox.
-- Delete disabled (with count) when `conteggioArticoli > 0`.
-- Rename: change `nome` (and optionally `codice` only if unused — simpler: **code is immutable after insert**; only `nome`, `ue`, `attivo`, `ordine` change). Code-immutable avoids rewriting `articoli` and `paese_origine` on a typo-fix that should have been a new row.
+- Delete disabled (with count) when `conteggioArticoli > 0`, and disabled when the row is the current `paese_origine` (change home first).
+- Rename: change `nome` only. **Code is immutable after insert** (`nome`, `ue`, `attivo`, `ordine` are the only editable fields). A wrong code is a new row, not a rewrite of `articoli` / `paese_origine`.
 - Home country: a select of active countries at the top of the section. Saving updates `impostazioni.paese_origine`.
 
 ### Sale dialog
@@ -131,7 +131,7 @@ Nav label and route (`/vendite-ue`) stay. No new page.
 
 ### Import
 
-`scripts/import-csv.ts` / incrementale: a sheet country that is not in `paesi` must not be written (leave `paese_vendita` null and report an anomaly). Do not auto-insert countries from a CSV.
+`scripts/import-csv.ts` / incrementale: a sheet country that is not in `paesi` must not be written (leave `paese_vendita` null and report an anomaly). Do not auto-insert countries from a CSV. The sheet value `Italia` (or the home-country display name) resolves to `paese_origine`, same rule as `parseVendita` — not a hardcoded `IT`.
 
 ---
 
@@ -209,7 +209,7 @@ Extend `dashboard_vendite_mensili` (same `p_da` / `p_a`, same grain) with:
 
 `profitto_totale` remains the generated-column sum (already `prezzo - costo - fee - spedizione`). The new columns exist so a row can be checked: `totale_vendite - costo_merci - fee_totali - spedizione_totale` equals `profitto_totale` (within rounding).
 
-`v_vendite_mensili` is a thin wrapper: recreate it after the function change (`CREATE OR REPLACE` can only *append* columns, which is what we need).
+`v_vendite_mensili` is a thin wrapper. `CREATE OR REPLACE FUNCTION` **cannot** add `RETURNS TABLE` columns: `0016` must `DROP` `v_vendite_mensili` and `dashboard_vendite_mensili` (and their grants) and recreate them. Then recreate the view.
 
 `VenditaMensile` and `getDatiDashboard` grow the same three fields. The existing chart does not change (still count + revenue). The table adds three numeric columns: Costo merce, Fee, Spedizione, before Profitto.
 
@@ -217,9 +217,9 @@ Extend `dashboard_vendite_mensili` (same `p_da` / `p_a`, same grain) with:
 
 Clicking a month row (or a “Dettaglio” control on that row) opens a dialog/sheet titled with `meseLabel`.
 
-Contents: every `articoli` row with `stato in ('venduto','consegnato')`, `data_vendita` in that calendar month (inclusive), **including archived**. Columns: product name, sale date, price, platform, fee, shipping, profit. Footer repeats the month totals so the list and the row can be compared.
+Contents: sold/delivered items whose `data_vendita` falls in the **intersection** of that calendar month and the dashboard period `?da=&a=` (the same clip `dashboard_vendite_mensili` already applies). Include archived. Columns: product name, sale date, price, platform, fee, shipping, profit. Footer repeats the **same clipped totals as the table row**, so the list and the row match on a custom mid-month period.
 
-Data access: extend `getArticoliPaginati` with optional `da` / `a` on `data_vendita` (sold states only when a date range is set), **and** a `includiArchiviati` flag defaulting to `true` for this dialog. Do not load the whole inventory into the client.
+Data access: one archive flag on `getArticoliPaginati` — `archivio: 'attivi' | 'archivio' | 'tutti'`, default `'attivi'`. The month dialog and the Vendite UE `?paese=mancante` deep link pass `'tutti'`. Also accept optional `da` / `a` on `data_vendita` (sold states only when a date range is set). Do not load the whole inventory into the client.
 
 If a month has more than `ARTICOLI_PER_PAGINA` (50) sales, paginate inside the dialog.
 
@@ -256,7 +256,7 @@ Dashboard RPCs and `v_vendite_per_paese_anno` do **not** filter on `archiviato_a
 ### Articoli list
 
 - Default: `archiviato_at is null`.
-- `?archivio=1` shows only archived rows (and the Filtri bar has a control to switch). Combined with `stato` / `q` / `paese=mancante` as AND filters. `paese=mancante` still means sold/delivered with null country, archived or not — when opened from Vendite UE, include archived so a hidden lacuna is still fixable. Implementation: `getArticoliPaginati` takes `archivio: 'attivi' | 'archivio' | 'tutti'`; Vendite UE deep link uses `'tutti'`.
+- `?archivio=1` shows only archived rows (and the Filtri bar has a control to switch). Combined with `stato` / `q` / `paese=mancante` as AND filters. `paese=mancante` still means sold/delivered with null country — the Vendite UE deep link uses `archivio: 'tutti'` so a hidden lacuna is still fixable.
 - Row menu (`AzioniStato`):
   - Unsold (`acquistato` / `in vendita`): **Elimina** (destructive). First click arms confirm (“Confermi? Elimina dall'inventario”); second click deletes. Same two-step pattern as “Annulla vendita”.
   - Sold (`venduto` / `consegnato`) and not archived: **Archivia**. One click is enough (reversible).
