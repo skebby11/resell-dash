@@ -1,4 +1,4 @@
-import { PAESI_UE, STATI_ARTICOLO, TIPI_CANALE, type StatoArticolo, type TipoCanale } from "@/types";
+import { STATI_ARTICOLO, TIPI_CANALE, type StatoArticolo, type TipoCanale } from "@/types";
 
 /**
  * Parsing e validazione dei dati dei form, separati dalle server action.
@@ -18,6 +18,11 @@ const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
 export type Esito<T, C extends string> =
   | { ok: true; valori: T }
   | { ok: false; campi: Partial<Record<C, string>>; errore: string };
+
+export interface ContestoPaese {
+  paeseOrigine: string;
+  codiciAmmessi: ReadonlySet<string>;
+}
 
 function stringa(formData: FormData, nome: string): string {
   return String(formData.get(nome) ?? "").trim();
@@ -118,14 +123,12 @@ export interface ValoriVendita {
   costoSpedizione: number | null;
   piattaformaVendita: string | null;
   destinazione: string | null;
-  /** Codice ISO paese UE. Coerente con `destinazione`: vedi `risolviPaeseVendita`. */
+  /** Codice ISO paese. Coerente con `destinazione`: vedi `risolviPaeseVendita`. */
   paeseVendita: string | null;
   spedizioniere: string | null;
   prodottoSponsorizzato: boolean;
   venditaPostOfferta: boolean;
 }
-
-const CODICI_PAESI_UE = new Set<string>(PAESI_UE.map((p) => p.codice));
 
 /**
  * Deriva il paese di vendita dalla destinazione, invece di trattarli come due
@@ -134,26 +137,35 @@ const CODICI_PAESI_UE = new Set<string>(PAESI_UE.map((p) => p.codice));
  * a doverla escludere per prima, con un messaggio comprensibile invece
  * dell'errore grezzo di Postgres.
  *
- *   destinazione 'Italia'  → sempre 'IT' (il client non decide il paese)
- *   destinazione 'Estero'  → il paese scelto, o `null` se non ancora noto
- *                            (legittimo: è esattamente la lacuna da colmare
- *                            a mano, non un errore di input)
+ *   destinazione 'Italia'  → sempre il paese di origine del contesto
+ *                            (il client non decide il paese)
+ *   destinazione 'Estero'  → il paese scelto se ammesso e diverso dall'origine,
+ *                            o `null` se non ancora noto (legittimo: è
+ *                            esattamente la lacuna da colmare a mano, non un
+ *                            errore di input)
  *   altro/assente          → `null`, nessun vincolo
  */
 function risolviPaeseVendita(
   destinazione: string | null,
-  paeseRaw: string | null
+  paeseRaw: string | null,
+  ctx: ContestoPaese
 ): { paeseVendita: string | null; errore?: string } {
-  if (destinazione === "Italia") return { paeseVendita: "IT" };
+  if (destinazione === "Italia") return { paeseVendita: ctx.paeseOrigine };
   if (destinazione === "Estero") {
     if (!paeseRaw) return { paeseVendita: null };
-    if (paeseRaw !== "IT" && CODICI_PAESI_UE.has(paeseRaw)) return { paeseVendita: paeseRaw };
+    const codice = paeseRaw.toUpperCase();
+    if (codice !== ctx.paeseOrigine && ctx.codiciAmmessi.has(codice)) {
+      return { paeseVendita: codice };
+    }
     return { paeseVendita: null, errore: "Paese non valido." };
   }
   return { paeseVendita: null };
 }
 
-export function parseVendita(formData: FormData): Esito<ValoriVendita, CampoVendita> {
+export function parseVendita(
+  formData: FormData,
+  ctx: ContestoPaese
+): Esito<ValoriVendita, CampoVendita> {
   const id = stringa(formData, "id");
   if (!UUID_RE.test(id)) return { ok: false, campi: {}, errore: "Articolo non valido." };
 
@@ -188,7 +200,8 @@ export function parseVendita(formData: FormData): Esito<ValoriVendita, CampoVend
   const destinazione = stringa(formData, "destinazione") || null;
   const { paeseVendita, errore: erroreePaese } = risolviPaeseVendita(
     destinazione,
-    stringa(formData, "paese_vendita") || null
+    stringa(formData, "paese_vendita") || null,
+    ctx
   );
   if (erroreePaese) campi.paese_vendita = erroreePaese;
 
@@ -222,19 +235,38 @@ export function parseTipoCanale(raw: string): TipoCanale | undefined {
   return (TIPI_CANALE as readonly string[]).includes(raw) ? (raw as TipoCanale) : undefined;
 }
 
+/** Codice ISO paese a due lettere, normalizzato in maiuscolo. */
+export function parseCodicePaese(raw: string): string | undefined {
+  const codice = raw.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(codice) ? codice : undefined;
+}
+
 /**
- * Nome di un canale: stessa normalizzazione spazi del nome prodotto
- * (`parseInserimento`), limite di lunghezza allineato al CHECK del database
- * (`length(nome) <= 60`) così l'errore si vede nel form, non come messaggio
- * grezzo di Postgres.
+ * Nome etichetta (canale, ecc.): normalizzazione spazi e limite di lunghezza
+ * allineato al CHECK del database (`length(nome) <= 60`).
  */
-export function parseNomeCanale(raw: string): string | undefined {
+export function parseNomeEtichetta(raw: string): string | undefined {
   const nome = raw.trim().replace(/\s+/g, " ");
   if (!nome || nome.length > 60) return undefined;
   return nome;
 }
 
+/**
+ * Nome di un canale: stesse regole di `parseNomeEtichetta`.
+ */
+export function parseNomeCanale(raw: string): string | undefined {
+  return parseNomeEtichetta(raw);
+}
+
 /** Confronto fra nomi canale: case-insensitive, come l'indice unico `ux_canali_tipo_nome`. */
 export function stessoNomeCanale(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
+}
+
+export function puoEliminareArticolo(stato: StatoArticolo): boolean {
+  return stato === "acquistato" || stato === "in vendita";
+}
+
+export function puoArchiviareArticolo(stato: StatoArticolo, archiviato: boolean): boolean {
+  return (stato === "venduto" || stato === "consegnato") && !archiviato;
 }

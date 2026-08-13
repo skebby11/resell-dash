@@ -1,20 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
   importoOpzionale,
+  parseCodicePaese,
   parseInserimento,
   parseNomeCanale,
   parseTipoCanale,
   parseVendita,
+  puoArchiviareArticolo,
+  puoEliminareArticolo,
   stessoNomeCanale,
+  type ContestoPaese,
 } from "@/lib/validazione";
 import { PAESI_UE } from "@/types";
 
 const ID = "3542aae4-7fa7-4882-84fb-dfd1c2e07ade";
 
+const CTX_IT: ContestoPaese = {
+  paeseOrigine: "IT",
+  codiciAmmessi: new Set([...PAESI_UE.map((p) => p.codice), "US"]),
+};
+
 function fd(campi: Record<string, string>): FormData {
   const f = new FormData();
   for (const [k, v] of Object.entries(campi)) f.append(k, v);
   return f;
+}
+
+function vendita(campi: Record<string, string>, ctx: ContestoPaese = CTX_IT) {
+  return parseVendita(fd(campi), ctx);
 }
 
 describe("importoOpzionale", () => {
@@ -134,7 +147,7 @@ describe("parseVendita", () => {
   };
 
   it("interpreta i valori e riconosce le checkbox assenti come false", () => {
-    const r = parseVendita(fd(valido));
+    const r = vendita(valido);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.valori).toMatchObject({
@@ -150,14 +163,14 @@ describe("parseVendita", () => {
   });
 
   it("considera spuntata una checkbox presente, qualunque sia il valore inviato", () => {
-    const r = parseVendita(fd({ ...valido, prodotto_sponsorizzato: "on" }));
-    const r2 = parseVendita(fd({ ...valido, prodotto_sponsorizzato: "" }));
+    const r = vendita({ ...valido, prodotto_sponsorizzato: "on" });
+    const r2 = vendita({ ...valido, prodotto_sponsorizzato: "" });
     expect(r.ok && r.valori.prodottoSponsorizzato).toBe(true);
     expect(r2.ok && r2.valori.prodottoSponsorizzato).toBe(true);
   });
 
   it("accetta fee e spedizione vuote, che restano null", () => {
-    const r = parseVendita(fd({ ...valido, fee: "", costo_spedizione: "" }));
+    const r = vendita({ ...valido, fee: "", costo_spedizione: "" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.valori.fee).toBeNull();
@@ -165,15 +178,15 @@ describe("parseVendita", () => {
   });
 
   it("segnala fee non valida senza confonderla con fee assente", () => {
-    const r = parseVendita(fd({ ...valido, fee: "-3" }));
+    const r = vendita({ ...valido, fee: "-3" });
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.campi.fee).toMatch(/non valida/);
   });
 
   it("distingue prezzo assente da prezzo non valido", () => {
-    const assente = parseVendita(fd({ ...valido, prezzo_vendita: "" }));
-    const invalido = parseVendita(fd({ ...valido, prezzo_vendita: "abc" }));
+    const assente = vendita({ ...valido, prezzo_vendita: "" });
+    const invalido = vendita({ ...valido, prezzo_vendita: "abc" });
     expect(assente.ok).toBe(false);
     expect(invalido.ok).toBe(false);
     if (assente.ok || invalido.ok) return;
@@ -183,7 +196,7 @@ describe("parseVendita", () => {
 
   it("rifiuta un id che non è un UUID", () => {
     for (const id of ["", "1", "'; drop table articoli; --", `${ID}x`]) {
-      const r = parseVendita(fd({ ...valido, id }));
+      const r = vendita({ ...valido, id });
       expect(r.ok, `id ${id}`).toBe(false);
       if (r.ok) return;
       expect(r.errore).toBe("Articolo non valido.");
@@ -191,34 +204,37 @@ describe("parseVendita", () => {
   });
 
   it("accetta consegnato e rifiuta gli stati non di vendita", () => {
-    const consegnato = parseVendita(fd({ ...valido, stato: "consegnato" }));
+    const consegnato = vendita({ ...valido, stato: "consegnato" });
     expect(consegnato.ok && consegnato.valori.stato).toBe("consegnato");
 
     for (const stato of ["acquistato", "in vendita"]) {
-      const r = parseVendita(fd({ ...valido, stato }));
+      const r = vendita({ ...valido, stato });
       expect(r.ok, `stato ${stato}`).toBe(false);
       if (!r.ok) expect(r.errore).toMatch(/solo vendite/);
     }
   });
 
   it("rifiuta uno stato inventato", () => {
-    const r = parseVendita(fd({ ...valido, stato: "regalato" }));
+    const r = vendita({ ...valido, stato: "regalato" });
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.errore).toBe("Stato non valido.");
   });
 
   it("richiede la data di vendita: il CHECK del database la pretende", () => {
-    const r = parseVendita(fd({ ...valido, data_vendita: "" }));
+    const r = vendita({ ...valido, data_vendita: "" });
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.campi.data_vendita).toMatch(/Indica/);
   });
 
   it("porta a null i campi testuali facoltativi lasciati vuoti", () => {
-    const r = parseVendita(
-      fd({ ...valido, piattaforma_vendita: "", destinazione: " ", spedizioniere: "" })
-    );
+    const r = vendita({
+      ...valido,
+      piattaforma_vendita: "",
+      destinazione: " ",
+      spedizioniere: "",
+    });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.valori.piattaformaVendita).toBeNull();
@@ -235,57 +251,102 @@ describe("parseVendita — paese di vendita", () => {
     prezzo_vendita: "45,00",
   };
 
-  it("destinazione Italia impone sempre paese IT, qualunque cosa mandi il client", () => {
-    const r1 = parseVendita(fd({ ...base, destinazione: "Italia" }));
-    const r2 = parseVendita(fd({ ...base, destinazione: "Italia", paese_vendita: "FR" }));
-    expect(r1.ok && r1.valori.paeseVendita).toBe("IT");
-    expect(r2.ok && r2.valori.paeseVendita).toBe("IT");
+  it("destinazione Italia impone il paese di origine, qualunque cosa mandi il client", () => {
+    const r1 = vendita({ ...base, destinazione: "Italia" });
+    const r2 = vendita({ ...base, destinazione: "Italia", paese_vendita: "FR" });
+    expect(r1.ok && r1.valori.paeseVendita).toBe(CTX_IT.paeseOrigine);
+    expect(r2.ok && r2.valori.paeseVendita).toBe(CTX_IT.paeseOrigine);
+  });
+
+  it("con paeseOrigine DE, destinazione Italia impone DE", () => {
+    const ctx: ContestoPaese = {
+      paeseOrigine: "DE",
+      codiciAmmessi: CTX_IT.codiciAmmessi,
+    };
+    const r = vendita({ ...base, destinazione: "Italia", paese_vendita: "FR" }, ctx);
+    expect(r.ok && r.valori.paeseVendita).toBe("DE");
   });
 
   it("destinazione Estero con un paese UE valido lo accetta", () => {
-    const r = parseVendita(fd({ ...base, destinazione: "Estero", paese_vendita: "FR" }));
+    const r = vendita({ ...base, destinazione: "Estero", paese_vendita: "FR" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.valori.destinazione).toBe("Estero");
     expect(r.valori.paeseVendita).toBe("FR");
   });
 
+  it("destinazione Estero accetta anche un paese extra-UE ammesso (es. US)", () => {
+    const r = vendita({ ...base, destinazione: "Estero", paese_vendita: "US" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valori.paeseVendita).toBe("US");
+  });
+
   it("destinazione Estero senza paese è una lacuna legittima, non un errore", () => {
-    const r = parseVendita(fd({ ...base, destinazione: "Estero" }));
+    const r = vendita({ ...base, destinazione: "Estero" });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.valori.paeseVendita).toBeNull();
   });
 
-  it("rifiuta un codice paese non fra i 27 stati UE (es. Regno Unito, post Brexit)", () => {
-    const r = parseVendita(fd({ ...base, destinazione: "Estero", paese_vendita: "GB" }));
+  it("rifiuta un codice paese non ammessi (es. Regno Unito, post Brexit)", () => {
+    const r = vendita({ ...base, destinazione: "Estero", paese_vendita: "GB" });
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.campi.paese_vendita).toMatch(/non valido/);
   });
 
-  it("rifiuta IT come paese quando la destinazione è Estero (incoerente)", () => {
-    const r = parseVendita(fd({ ...base, destinazione: "Estero", paese_vendita: "IT" }));
+  it("rifiuta il codice del paese di origine quando la destinazione è Estero", () => {
+    const r = vendita({ ...base, destinazione: "Estero", paese_vendita: "IT" });
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.campi.paese_vendita).toMatch(/non valido/);
   });
 
   it("senza destinazione il paese resta ignoto, senza errore", () => {
-    const r = parseVendita(fd(base));
+    const r = vendita(base);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.valori.destinazione).toBeNull();
     expect(r.valori.paeseVendita).toBeNull();
   });
 
-  it("accetta tutti e 27 i codici dell'elenco UE quando la destinazione è Estero", () => {
+  it("accetta tutti i codici UE tranne il paese di origine quando la destinazione è Estero", () => {
     for (const { codice } of PAESI_UE) {
-      if (codice === "IT") continue;
-      const r = parseVendita(fd({ ...base, destinazione: "Estero", paese_vendita: codice }));
+      if (codice === CTX_IT.paeseOrigine) continue;
+      const r = vendita({ ...base, destinazione: "Estero", paese_vendita: codice });
       expect(r.ok, `codice ${codice}`).toBe(true);
       if (r.ok) expect(r.valori.paeseVendita).toBe(codice);
     }
+  });
+});
+
+describe("parseCodicePaese", () => {
+  it("normalizza a due lettere maiuscole", () => {
+    expect(parseCodicePaese("us")).toBe("US");
+  });
+
+  it("rifiuta codici non ISO a due lettere", () => {
+    expect(parseCodicePaese("U")).toBeUndefined();
+    expect(parseCodicePaese("USA")).toBeUndefined();
+    expect(parseCodicePaese("u1")).toBeUndefined();
+  });
+});
+
+describe("puoEliminareArticolo", () => {
+  it("permette l'eliminazione solo per acquistato e in vendita", () => {
+    expect(puoEliminareArticolo("acquistato")).toBe(true);
+    expect(puoEliminareArticolo("in vendita")).toBe(true);
+    expect(puoEliminareArticolo("venduto")).toBe(false);
+    expect(puoEliminareArticolo("consegnato")).toBe(false);
+  });
+});
+
+describe("puoArchiviareArticolo", () => {
+  it("permette l'archiviazione solo per venduto/consegnato non già archiviato", () => {
+    expect(puoArchiviareArticolo("venduto", false)).toBe(true);
+    expect(puoArchiviareArticolo("venduto", true)).toBe(false);
+    expect(puoArchiviareArticolo("acquistato", false)).toBe(false);
   });
 });
 
