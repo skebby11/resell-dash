@@ -71,3 +71,18 @@ export function presetAttivo(periodo: Periodo, oggi: Date): PresetPeriodo | "tut
   );
   return voce?.[0];
 }
+
+/**
+ * Intersezione tra un mese di calendario (`YYYY-MM`, come `VenditaMensile.mese`)
+ * e il filtro periodo della dashboard: i bordi del mese, ritagliati se `periodo`
+ * inizia o finisce a metà mese. Senza limiti restituisce il mese intero.
+ */
+export function intervalloMeseNelPeriodo(mese: string, periodo: Periodo): Required<Periodo> {
+  const [anno, m] = mese.split("-").map(Number);
+  const inizio = `${mese}-01`;
+  const ultimo = new Date(Date.UTC(anno, m, 0)).getUTCDate();
+  const fine = `${mese}-${String(ultimo).padStart(2, "0")}`;
+  const da = periodo.da && periodo.da > inizio ? periodo.da : inizio;
+  const a = periodo.a && periodo.a < fine ? periodo.a : fine;
+  return { da, a };
+}

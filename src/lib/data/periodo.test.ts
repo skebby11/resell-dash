@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { normalizzaData, presetAttivo, presetPeriodo, risolviPeriodo } from "./periodo";
+import {
+  intervalloMeseNelPeriodo,
+  normalizzaData,
+  presetAttivo,
+  presetPeriodo,
+  risolviPeriodo,
+} from "./periodo";
 
 describe("normalizzaData", () => {
   it("accetta una data ISO valida", () => {
@@ -76,5 +82,25 @@ describe("presetAttivo", () => {
 
   it("un intervallo personalizzato non combacia con nessun preset", () => {
     expect(presetAttivo({ da: "2026-03-01", a: "2026-05-01" }, oggi)).toBeUndefined();
+  });
+});
+
+describe("intervalloMeseNelPeriodo", () => {
+  it("senza periodo restituisce il mese di calendario intero", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", {})).toEqual({
+      da: "2026-03-01",
+      a: "2026-03-31",
+    });
+  });
+
+  it("febbraio non bisestile finisce il 28", () => {
+    expect(intervalloMeseNelPeriodo("2026-02", {}).a).toBe("2026-02-28");
+  });
+
+  it("interseca un periodo a metà mese", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { da: "2026-03-10", a: "2026-03-20" })).toEqual({
+      da: "2026-03-10",
+      a: "2026-03-20",
+    });
   });
 });
