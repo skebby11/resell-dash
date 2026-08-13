@@ -320,10 +320,14 @@ export async function spostaPaese(codiceRaw: string, direzione: "su" | "giu"): P
   if (eVicino) throw new Error(eVicino.message);
   if (!vicino) return;
 
-  const { error: e1 } = await supabase.from("paesi").update({ ordine: vicino.ordine }).eq("codice", riga.codice);
-  if (e1) throw new Error(e1.message);
-  const { error: e2 } = await supabase.from("paesi").update({ ordine: riga.ordine }).eq("codice", vicino.codice);
-  if (e2) throw new Error(e2.message);
+  // Un'unica funzione SQL (0018_scambio_ordine_atomico): due UPDATE separate
+  // lascerebbero le due righe con lo stesso `ordine` se la seconda fallisse,
+  // senza un vincolo di unicità a impedirlo.
+  const { error: eScambio } = await supabase.rpc("scambia_ordine_paesi", {
+    cod_a: riga.codice,
+    cod_b: vicino.codice,
+  });
+  if (eScambio) throw new Error(eScambio.message);
 
   rivalidaPagine();
 }
@@ -452,7 +456,7 @@ export async function rinominaCategoria(
   if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
 
   if (vecchioNome !== nome) {
-    const { ids, error: eIds } = await idsProdottiConCategoria(supabase, vecchioNome);
+    const { ids, error: eIds } = await idsProdottiConCategoria(supabase, [vecchioNome, nome]);
     const fallimento = eIds ?? (await aggiornaCategoriaProdotti(supabase, ids, nome));
     if (fallimento) {
       const { error: eRevert } = await supabase
@@ -472,14 +476,20 @@ export async function rinominaCategoria(
   return { ok: true, seq: seq + 1 };
 }
 
-/** PostgREST tronca a 1000: si pagina e si filtra in JS (uguaglianza case-insensitive, non ILIKE). */
+/**
+ * PostgREST tronca a 1000: si pagina e si filtra in JS (uguaglianza
+ * case-insensitive, non ILIKE). Cerca tutti i nomi passati (vecchio e nuovo):
+ * un tentativo di rinomina precedente può essere fallito a metà, lasciando
+ * una parte dei prodotti già sul nome nuovo — un retry deve ritrovarli per
+ * completare la propagazione invece di lasciarli orfani.
+ */
 async function idsProdottiConCategoria(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  nome: string
+  nomi: string[]
 ): Promise<{ ids: string[]; error?: string }> {
   const ids: string[] = [];
   const perPagina = 1000;
-  const cercato = nome.toLowerCase();
+  const cercati = new Set(nomi.map((n) => n.toLowerCase()));
   for (let da = 0; ; da += perPagina) {
     const { data, error } = await supabase
       .from("prodotti")
@@ -490,27 +500,35 @@ async function idsProdottiConCategoria(
     if (error) return { ids, error: error.message };
     const righe = data ?? [];
     for (const r of righe) {
-      if (r.categoria != null && r.categoria.toLowerCase() === cercato) ids.push(r.id);
+      if (r.categoria != null && cercati.has(r.categoria.toLowerCase())) ids.push(r.id);
     }
     if (righe.length < perPagina) break;
   }
   return { ids };
 }
 
+/**
+ * Non si interrompe al primo blocco fallito: fermarsi lascerebbe una parte
+ * dei prodotti sul nome nuovo e una parte su quello vecchio, e senza
+ * continuare sugli altri blocchi un retry avrebbe più lavoro da rifare del
+ * necessario. Idempotente: riscrivere `categoria = nome` su un prodotto già
+ * aggiornato non ha effetto.
+ */
 async function aggiornaCategoriaProdotti(
   supabase: Awaited<ReturnType<typeof createClient>>,
   ids: string[],
   nome: string
 ): Promise<string | undefined> {
   const blocco = 100;
+  let primoErrore: string | undefined;
   for (let i = 0; i < ids.length; i += blocco) {
     const { error } = await supabase
       .from("prodotti")
       .update({ categoria: nome })
       .in("id", ids.slice(i, i + blocco));
-    if (error) return error.message;
+    if (error) primoErrore ??= error.message;
   }
-  return undefined;
+  return primoErrore;
 }
 
 /** Attiva/disattiva una categoria. Disattivare non tocca `prodotti`. */
@@ -546,10 +564,14 @@ export async function spostaCategoria(id: string, direzione: "su" | "giu"): Prom
   if (eVicino) throw new Error(eVicino.message);
   if (!vicino) return;
 
-  const { error: e1 } = await supabase.from("categorie").update({ ordine: vicino.ordine }).eq("id", riga.id);
-  if (e1) throw new Error(e1.message);
-  const { error: e2 } = await supabase.from("categorie").update({ ordine: riga.ordine }).eq("id", vicino.id);
-  if (e2) throw new Error(e2.message);
+  // Stesso motivo dello scambio in spostaPaese: un'unica funzione SQL invece
+  // di due UPDATE separate, per evitare un ordine duplicato se la seconda
+  // fallisse a metà.
+  const { error: eScambio } = await supabase.rpc("scambia_ordine_categorie", {
+    id_a: riga.id,
+    id_b: vicino.id,
+  });
+  if (eScambio) throw new Error(eScambio.message);
 
   rivalidaPagine();
 }

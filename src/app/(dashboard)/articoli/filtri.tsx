@@ -33,6 +33,7 @@ export function Filtri({
     const params = new URLSearchParams();
     if (nuovoStato) params.set("stato", nuovoStato);
     if (q) params.set("q", q);
+    if (senzaPaese) params.set("paese", "mancante");
     if (archivio) params.set("archivio", "1");
     const qs = params.toString();
     return qs ? `/articoli?${qs}` : "/articoli";
@@ -41,6 +42,7 @@ export function Filtri({
   const hrefTutti = (() => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
+    if (senzaPaese) params.set("paese", "mancante");
     const qs = params.toString();
     return qs ? `/articoli?${qs}` : "/articoli";
   })();
@@ -48,6 +50,7 @@ export function Filtri({
   const hrefArchivio = (() => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
+    if (senzaPaese) params.set("paese", "mancante");
     params.set("archivio", "1");
     return `/articoli?${params.toString()}`;
   })();

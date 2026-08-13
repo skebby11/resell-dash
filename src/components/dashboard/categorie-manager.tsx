@@ -248,6 +248,7 @@ export function CategorieManager({ categorie }: { categorie: Categoria[] }) {
           value={nomeNuovo}
           onChange={(e) => setNomeNuovo(e.target.value)}
           placeholder="Nuova categoria…"
+          aria-label="Nome della categoria"
           className="h-8"
         />
         <BottoneSalvaAggiungi />

@@ -697,6 +697,23 @@ export async function getContestoPaese(): Promise<ContestoPaese> {
   };
 }
 
+/**
+ * `paese_vendita` già registrato su un articolo, per permettere a
+ * `parseVendita` di accettare un salvataggio che lo lascia invariato anche se
+ * il paese di origine è cambiato nel frattempo e ora coincide con quel
+ * codice (vedi `ContestoPaese.paeseVenditaAttuale`).
+ */
+export async function getPaeseVenditaArticolo(id: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("articoli")
+    .select("paese_vendita")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) erroreLettura("paese vendita articolo", error.message);
+  return data?.paese_vendita ?? null;
+}
+
 /** Stato valido a partire da un parametro di query non fidato. */
 export function normalizzaStato(raw: string | undefined): StatoArticolo | undefined {
   return (STATI_ARTICOLO as readonly string[]).includes(raw ?? "")

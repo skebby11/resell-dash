@@ -336,6 +336,7 @@ export function PaesiManager({ paesi, paeseOrigine }: { paesi: Paese[]; paeseOri
           value={nomeNuovo}
           onChange={(e) => setNomeNuovo(e.target.value)}
           placeholder="Nuovo paese…"
+          aria-label="Nome del paese"
           className="h-8 min-w-40 flex-1"
         />
         <Label className="flex items-center gap-2 text-xs font-normal text-muted-foreground">

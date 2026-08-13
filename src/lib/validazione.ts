@@ -22,6 +22,13 @@ export type Esito<T, C extends string> =
 export interface ContestoPaese {
   paeseOrigine: string;
   codiciAmmessi: ReadonlySet<string>;
+  /**
+   * `paese_vendita` già registrato sull'articolo in modifica, se noto. Un
+   * cambio del paese di origine dopo la vendita può far coincidere questo
+   * valore con `paeseOrigine`: senza questa eccezione un salvataggio che non
+   * tocca il paese verrebbe rifiutato come "Paese non valido".
+   */
+  paeseVenditaAttuale?: string | null;
 }
 
 function stringa(formData: FormData, nome: string): string {
@@ -155,6 +162,11 @@ function risolviPaeseVendita(
     if (!paeseRaw) return { paeseVendita: null };
     const codice = paeseRaw.toUpperCase();
     if (codice !== ctx.paeseOrigine && ctx.codiciAmmessi.has(codice)) {
+      return { paeseVendita: codice };
+    }
+    // Un salvataggio che lascia invariato il paese resta valido anche se
+    // l'origine è cambiata nel frattempo e ora coincide con quel codice.
+    if (codice === ctx.paeseVenditaAttuale) {
       return { paeseVendita: codice };
     }
     return { paeseVendita: null, errore: "Paese non valido." };

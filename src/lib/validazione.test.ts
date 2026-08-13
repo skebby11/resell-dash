@@ -282,6 +282,20 @@ describe("parseVendita — paese di vendita", () => {
     expect(r.valori.paeseVendita).toBe("US");
   });
 
+  it("un salvataggio invariato resta valido se l'origine è cambiata e ora coincide col paese storico", () => {
+    const ctx: ContestoPaese = { ...CTX_IT, paeseOrigine: "US", paeseVenditaAttuale: "US" };
+    const r = vendita({ ...base, destinazione: "Estero", paese_vendita: "US" }, ctx);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valori.paeseVendita).toBe("US");
+  });
+
+  it("un cambio verso un paese uguale all'origine ma diverso dallo storico resta rifiutato", () => {
+    const ctx: ContestoPaese = { ...CTX_IT, paeseOrigine: "US", paeseVenditaAttuale: "FR" };
+    const r = vendita({ ...base, destinazione: "Estero", paese_vendita: "US" }, ctx);
+    expect(r.ok).toBe(false);
+  });
+
   it("destinazione Estero senza paese è una lacuna legittima, non un errore", () => {
     const r = vendita({ ...base, destinazione: "Estero" });
     expect(r.ok).toBe(true);

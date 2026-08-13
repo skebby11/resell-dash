@@ -72,15 +72,13 @@ function CampiVendita({
   const [paeseVendita, setPaeseVendita] = useState(articolo.paeseVendita ?? "");
 
   // Selettore estero: attivi diversi dall'origine. Se si sta modificando una
-  // vendita il cui paese è stato disattivato, lo teniamo in lista per non
-  // perdere il valore già salvato.
+  // vendita il cui paese è stato disattivato — o il cui paese coincide con
+  // l'origine attuale perché quest'ultima è cambiata dopo la vendita — lo
+  // teniamo in lista per non perdere il valore già salvato: il server accetta
+  // quel valore solo perché è quello già registrato (vedi risolviPaeseVendita).
   const paesiEsteri = paesi.filter((p) => p.attivo && p.codice !== paeseOrigine);
   const codiceStorico = articolo.paeseVendita;
-  if (
-    codiceStorico &&
-    codiceStorico !== paeseOrigine &&
-    !paesiEsteri.some((p) => p.codice === codiceStorico)
-  ) {
+  if (codiceStorico && !paesiEsteri.some((p) => p.codice === codiceStorico)) {
     const storico = paesi.find((p) => p.codice === codiceStorico);
     paesiEsteri.push(
       storico ?? {

@@ -184,7 +184,6 @@ export type Database = {
         };
         Update: {
           attivo?: boolean;
-          codice?: string;
           created_at?: string;
           nome?: string;
           ordine?: number;
@@ -365,6 +364,10 @@ export type Database = {
         Args: { p_da: string | null; p_a: string | null };
         Returns: { label: string; value: number }[];
       };
+      // Scambio atomico di `ordine` (0018_scambio_ordine_atomico.sql): usate
+      // da spostaPaese/spostaCategoria al posto di due UPDATE separate.
+      scambia_ordine_paesi: { Args: { cod_a: string; cod_b: string }; Returns: undefined };
+      scambia_ordine_categorie: { Args: { id_a: string; id_b: string }; Returns: undefined };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getContestoPaese } from "@/lib/data/queries";
+import { getContestoPaese, getPaeseVenditaArticolo } from "@/lib/data/queries";
 import {
   parseVendita,
   puoArchiviareArticolo,
@@ -37,8 +37,12 @@ export async function registraVendita(
   formData: FormData
 ): Promise<StatoVendita> {
   const seq = stato.seq ?? 0;
-  const ctx = await getContestoPaese();
-  const esito = parseVendita(formData, ctx);
+  const idRaw = String(formData.get("id") ?? "").trim();
+  const [ctxBase, paeseVenditaAttuale] = await Promise.all([
+    getContestoPaese(),
+    UUID_RE.test(idRaw) ? getPaeseVenditaArticolo(idRaw) : Promise.resolve(null),
+  ]);
+  const esito = parseVendita(formData, { ...ctxBase, paeseVenditaAttuale });
   if (!esito.ok) return { seq, campi: esito.campi, errore: esito.errore };
   const v = esito.valori;
 
@@ -185,7 +189,14 @@ export async function eliminaArticolo(id: string): Promise<void> {
     throw new Error("Si possono eliminare solo articoli non ancora venduti.");
   }
 
-  const { error, count } = await supabase.from("articoli").delete({ count: "exact" }).eq("id", id);
+  // Predicato ripetuto anche nella query di scrittura: tra la lettura e qui una
+  // seconda richiesta può aver cambiato lo stato dell'articolo, e senza questo
+  // filtro si cancellerebbe comunque una riga ormai venduta.
+  const { error, count } = await supabase
+    .from("articoli")
+    .delete({ count: "exact" })
+    .eq("id", id)
+    .in("stato", ["acquistato", "in vendita"]);
   if (error) throw new Error(error.message);
   if (count === 0) throw new Error("Articolo non trovato o non eliminabile.");
 
@@ -211,11 +222,17 @@ export async function archiviaArticolo(id: string): Promise<void> {
     throw new Error("Si possono archiviare solo articoli già venduti.");
   }
 
-  const { error } = await supabase
+  // Stesso predicato ripetuto in scrittura del delete sopra: senza vincolare
+  // stato e archiviato_at qui, una richiesta concorrente potrebbe archiviare
+  // un articolo tornato invenduto nel frattempo, o ri-archiviare inutilmente.
+  const { error, count } = await supabase
     .from("articoli")
-    .update({ archiviato_at: new Date().toISOString() })
-    .eq("id", id);
+    .update({ archiviato_at: new Date().toISOString() }, { count: "exact" })
+    .eq("id", id)
+    .in("stato", ["venduto", "consegnato"])
+    .is("archiviato_at", null);
   if (error) throw new Error(error.message);
+  if (count === 0) throw new Error("Articolo non trovato o non archiviabile.");
 
   revalidatePath("/articoli");
 }
@@ -235,8 +252,13 @@ export async function ripristinaArticolo(id: string): Promise<void> {
     throw new Error("Si possono ripristinare solo articoli già venduti.");
   }
 
-  const { error } = await supabase.from("articoli").update({ archiviato_at: null }).eq("id", id);
+  const { error, count } = await supabase
+    .from("articoli")
+    .update({ archiviato_at: null }, { count: "exact" })
+    .eq("id", id)
+    .in("stato", ["venduto", "consegnato"]);
   if (error) throw new Error(error.message);
+  if (count === 0) throw new Error("Articolo non trovato o non ripristinabile.");
 
   revalidatePath("/articoli");
 }

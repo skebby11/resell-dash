@@ -9,6 +9,7 @@
  */
 
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MESE_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export interface Periodo {
   da?: string;
@@ -80,8 +81,13 @@ export function presetAttivo(periodo: Periodo, oggi: Date): PresetPeriodo | "tut
  *
  * Se il periodo non interseca il mese, può risultare `da > a` (query vuota),
  * non "nessun limite".
+ *
+ * `mese` arriva da una server action (parametro non fidato): se non rispetta
+ * `YYYY-MM` restituisce un intervallo invertito (query vuota) invece di
+ * costruire un filtro malformato che Postgres rifiuterebbe con un errore.
  */
 export function intervalloMeseNelPeriodo(mese: string, periodo: Periodo): Required<Periodo> {
+  if (!MESE_RE.test(mese)) return { da: "9999-12-31", a: "0001-01-01" };
   const [anno, m] = mese.split("-").map(Number);
   const inizio = `${mese}-01`;
   const ultimo = new Date(Date.UTC(anno, m, 0)).getUTCDate();
