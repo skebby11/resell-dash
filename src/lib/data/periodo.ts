@@ -1,11 +1,11 @@
 /**
- * Parsing e preset del filtro periodo della dashboard, come funzioni pure su
- * stringhe non fidate (parametri URL `?da=&a=`) — testabili senza Next.js né
- * database, sullo stesso modello di `src/lib/validazione.ts`.
+ * Parsing, preset e ritaglio del filtro periodo della dashboard, come funzioni
+ * pure su stringhe non fidate (parametri URL `?da=&a=`, bordi mese) — testabili
+ * senza Next.js né database, sullo stesso modello di `src/lib/validazione.ts`.
  *
  * Le date risolte qui alimentano `dashboard_kpi`/`dashboard_vendite_mensili`/
- * `dashboard_distribuzione_*` via `supabase.rpc()`: un parametro non
- * interpretabile deve diventare "nessun limite", non un errore 500.
+ * `dashboard_distribuzione_*` e il dettaglio mensile via `supabase.rpc()`: un
+ * parametro non interpretabile deve diventare "nessun limite", non un errore 500.
  */
 
 const DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -75,14 +75,20 @@ export function presetAttivo(periodo: Periodo, oggi: Date): PresetPeriodo | "tut
 /**
  * Intersezione tra un mese di calendario (`YYYY-MM`, come `VenditaMensile.mese`)
  * e il filtro periodo della dashboard: i bordi del mese, ritagliati se `periodo`
- * inizia o finisce a metà mese. Senza limiti restituisce il mese intero.
+ * inizia o finisce a metà mese. Senza limiti (o con date non valide, come
+ * `risolviPeriodo`) restituisce il mese intero.
+ *
+ * Se il periodo non interseca il mese, può risultare `da > a` (query vuota),
+ * non "nessun limite".
  */
 export function intervalloMeseNelPeriodo(mese: string, periodo: Periodo): Required<Periodo> {
   const [anno, m] = mese.split("-").map(Number);
   const inizio = `${mese}-01`;
   const ultimo = new Date(Date.UTC(anno, m, 0)).getUTCDate();
   const fine = `${mese}-${String(ultimo).padStart(2, "0")}`;
-  const da = periodo.da && periodo.da > inizio ? periodo.da : inizio;
-  const a = periodo.a && periodo.a < fine ? periodo.a : fine;
+  const periodoDa = normalizzaData(periodo.da);
+  const periodoA = normalizzaData(periodo.a);
+  const da = periodoDa && periodoDa > inizio ? periodoDa : inizio;
+  const a = periodoA && periodoA < fine ? periodoA : fine;
   return { da, a };
 }

@@ -103,4 +103,36 @@ describe("intervalloMeseNelPeriodo", () => {
       a: "2026-03-20",
     });
   });
+
+  it("periodo solo da ritaglia l'inizio e lascia la fine del mese", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { da: "2026-03-10" })).toEqual({
+      da: "2026-03-10",
+      a: "2026-03-31",
+    });
+  });
+
+  it("periodo solo a ritaglia la fine (ultimi-12-mesi sul mese corrente)", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { a: "2026-03-20" })).toEqual({
+      da: "2026-03-01",
+      a: "2026-03-20",
+    });
+  });
+
+  it("periodo più largo del mese restituisce il mese intero", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { da: "2026-01-01", a: "2026-12-31" })).toEqual({
+      da: "2026-03-01",
+      a: "2026-03-31",
+    });
+  });
+
+  it("febbraio bisestile finisce il 29", () => {
+    expect(intervalloMeseNelPeriodo("2028-02", {}).a).toBe("2028-02-29");
+  });
+
+  it("una data non valida nel periodo viene ignorata", () => {
+    expect(intervalloMeseNelPeriodo("2026-03", { da: "nonsenso" })).toEqual({
+      da: "2026-03-01",
+      a: "2026-03-31",
+    });
+  });
 });
