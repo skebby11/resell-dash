@@ -84,7 +84,11 @@ begin
 
   update public.categorie set nome = nuovo_nome where id = categoria_id;
 
-  if lower(v_vecchio_nome) <> lower(nuovo_nome) then
+  -- Confronto esatto, non case-insensitive: una rinomina che cambia solo il
+  -- case ("Console" -> "console") deve comunque propagare, altrimenti i
+  -- prodotti restano con la grafia vecchia mentre la categoria ha già quella
+  -- nuova.
+  if v_vecchio_nome <> nuovo_nome then
     update public.prodotti
     set categoria = nuovo_nome
     where categoria is not null and lower(categoria) = lower(v_vecchio_nome);
