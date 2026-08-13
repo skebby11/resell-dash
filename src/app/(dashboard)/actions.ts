@@ -1,7 +1,7 @@
 "use server";
 
 import { intervalloMeseNelPeriodo } from "@/lib/data/periodo";
-import { getArticoliPaginati } from "@/lib/data/queries";
+import { getArticoliPaginati, normalizzaPagina } from "@/lib/data/queries";
 
 /**
  * Vendite di un mese di calendario, ritagliate al periodo della dashboard
@@ -18,6 +18,6 @@ export async function caricaVenditeMese(
   return getArticoliPaginati({
     daVendita: clip.da,
     aVendita: clip.a,
-    pagina,
+    pagina: normalizzaPagina(String(pagina)),
   });
 }

@@ -78,7 +78,16 @@ export function DettaglioMese({
 
   return (
     <Dialog onOpenChange={onOpenChange}>
-      <DialogTrigger render={<Button variant="ghost" size="sm" className="h-7 px-2 text-xs" />}>
+      <DialogTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            aria-label={`Dettaglio ${mese.meseLabel}`}
+          />
+        }
+      >
         Dettaglio
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
@@ -89,6 +98,12 @@ export function DettaglioMese({
             {periodo.da || periodo.a ? ", ritagliati al periodo della dashboard" : ""}.
           </DialogDescription>
         </DialogHeader>
+
+        {errore && (
+          <p className="text-sm text-destructive" role="alert">
+            {errore}
+          </p>
+        )}
 
         <Table>
           <TableHeader>
@@ -103,16 +118,10 @@ export function DettaglioMese({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {errore && !pagina ? (
-              <TableRow>
-                <TableCell colSpan={7} className="py-8 text-center text-destructive">
-                  {errore}
-                </TableCell>
-              </TableRow>
-            ) : !pagina ? (
+            {!pagina ? (
               <TableRow>
                 <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                  Caricamento…
+                  {errore ? "—" : "Caricamento…"}
                 </TableCell>
               </TableRow>
             ) : pagina.righe.length === 0 ? (
