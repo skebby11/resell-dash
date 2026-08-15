@@ -76,8 +76,9 @@ function BadgeDaConfermare() {
  * Campi che la scelta di un candidato IGDB può precompilare (non il catalogo
  * interno, che è già dato autorevole). L'utente deve vedere chiaramente quali
  * valori sono ancora "suggerimenti da verificare": un campo precompilato male
- * e accettato senza guardare è peggio di un campo vuoto, soprattutto per
- * `categoria` che alimenta le statistiche.
+ * e accettato senza guardare è peggio di un campo vuoto. La categoria non viene
+ * inferita da IGDB: ora è configurabile per-installazione e una piattaforma
+ * IGDB non è sempre una categoria prodotto affidabile.
  */
 type CampoSuggerito = "nome" | "categoria" | "piattaforma";
 type SuggerimentiAttivi = Partial<Record<CampoSuggerito, true>>;
@@ -338,18 +339,21 @@ function CampiInserimento({
 
   function sceglierCandidatoIgdb(candidato: CandidatoIgdb) {
     setNome(candidato.nome);
-    setCategoria("Videogiochi");
+    // La categoria non è un dato affidabile di IGDB e non è più una costante
+    // globale: l'utente sceglie una categoria attiva della propria
+    // installazione (o ne digita una nuova).
+    setCategoria("");
     if (candidato.copertina) setFotoUrl(candidato.copertina);
     setPiattaformeCandidato(candidato.piattaforme);
     if (candidato.piattaforme.length === 1) {
       setPiattaformaGioco(candidato.piattaforme[0]);
-      setSuggeriti({ nome: true, categoria: true, piattaforma: true });
+      setSuggeriti({ nome: true, piattaforma: true });
     } else {
       // Più piattaforme per lo stesso titolo: il barcode è di UNA copia
       // precisa, non indoviniamo. L'utente sceglie dal datalist qui sotto,
       // ora popolato con le sole piattaforme reali di questo gioco.
       setPiattaformaGioco("");
-      setSuggeriti({ nome: true, categoria: true });
+      setSuggeriti({ nome: true });
     }
     setRisultatiIgdb([]);
   }
