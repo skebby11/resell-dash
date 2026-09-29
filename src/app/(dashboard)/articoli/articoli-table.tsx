@@ -12,6 +12,7 @@ import { StatoBadge } from "@/components/dashboard/stato-badge";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Articolo, Paese } from "@/types";
 import { AzioniStato } from "./azioni-stato";
+import { CostoDialog } from "./costo-dialog";
 import { VenditaDialog } from "./vendita-dialog";
 
 const VENDUTO_STATI = new Set(["venduto", "consegnato"]);
@@ -86,7 +87,10 @@ export function ArticoliTable({
                   {formatDate(a.dataAcquisto)}
                 </TableCell>
                 <TableCell className="text-right font-mono-num">
-                  {formatCurrency(a.costoAcquisto)}
+                  <span className="inline-flex items-center gap-1">
+                    {formatCurrency(a.costoAcquisto)}
+                    <CostoDialog articolo={a} />
+                  </span>
                 </TableCell>
                 <TableCell>
                   <StatoBadge stato={a.stato} />
