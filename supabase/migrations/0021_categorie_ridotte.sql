@@ -8,7 +8,7 @@
 
 -- 1. Valori fuori elenco: categoria -> piattaforma.
 update public.prodotti
-set piattaforma_gioco = coalesce(nullif(trim(piattaforma_gioco), ''), trim(categoria)),
+set piattaforma_gioco = coalesce(nullif(trim(piattaforma_gioco), ''), nullif(trim(categoria), '')),
     categoria = null
 where categoria is not null
   and lower(trim(categoria)) not in ('videogiochi', 'console', 'controller', 'accessori');
