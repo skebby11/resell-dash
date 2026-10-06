@@ -24,11 +24,14 @@ begin
   end if;
 
   -- Ordine fisso sui lock: due istruzioni su insiemi di prodotti che si
-  -- sovrappongono non possono andare in deadlock.
+  -- sovrappongono non possono andare in deadlock. NO KEY UPDATE e non
+  -- UPDATE: l'insert di un articolo tiene già un KEY SHARE sul prodotto (check
+  -- della FK), compatibile con NO KEY UPDATE ma non con UPDATE; due insert
+  -- concorrenti sullo stesso prodotto si bloccherebbero a vicenda.
   perform 1 from public.prodotti
   where id = any(prodotto_ids)
   order by id
-  for update;
+  for no key update;
 
   -- Sottoquery per prodotto (non join su gruppi): un prodotto rimasto senza
   -- articoli torna a NULL invece di tenere la vecchia media.
