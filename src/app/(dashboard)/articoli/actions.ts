@@ -75,6 +75,22 @@ export async function registraVendita(
   return { ok: true, seq: seq + 1 };
 }
 
+/** Corregge il costo d'acquisto e ricalcola le medie del prodotto (0020). */
+export async function aggiornaCostoAcquisto(id: string, costo: number): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Articolo non valido.");
+  if (!Number.isFinite(costo) || costo < 0) throw new Error("Il costo deve essere un numero non negativo.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("aggiorna_costo_acquisto", {
+    articolo_id: id,
+    nuovo_costo: Math.round(costo * 100) / 100,
+  });
+  if (error) throw new Error(error.message);
+
+  rivalidaPagine();
+  revalidatePath("/catalogo");
+}
+
 /**
  * Cambia solo lo stato, per le transizioni che non richiedono dati aggiuntivi
  * (acquistato → in vendita, venduto → consegnato, e i ritorni indietro).

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -26,6 +26,18 @@ const barlowCondensed = Barlow_Condensed({
 export const metadata: Metadata = {
   title: "Rewind — Dashboard Reselling",
   description: "Dashboard di gestione acquisti e rivendite retrogaming.",
+  // "Aggiungi a Home" su iPhone: nome sotto l'icona e apertura a schermo
+  // intero. Barra di stato `default` (non `black-translucent`): il contenuto
+  // non finisce sotto il notch, quindi non servono padding di safe area.
+  appleWebApp: {
+    capable: true,
+    title: "Rewind",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0b1d2a",
 };
 
 export default function RootLayout({

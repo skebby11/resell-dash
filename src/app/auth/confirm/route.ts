@@ -1,12 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-
-/** Solo path interni: evita che `next` diventi un open redirect. */
-function destinazioneSicura(next: string | null): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
-  return next;
-}
+import { percorsoInternoSicuro as destinazioneSicura } from "@/lib/percorso-sicuro";
 
 /**
  * Atterraggio del magic link: scambia il token contenuto nel link con una
