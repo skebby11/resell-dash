@@ -6,6 +6,11 @@
 -- il vecchio valore di categoria viene scartato. La categoria torna NULL.
 -- Idempotente: rieseguirla non tocca nulla.
 
+-- 0. "Varie" non è una piattaforma: si svuota la categoria e basta.
+update public.prodotti
+set categoria = null
+where categoria is not null and lower(trim(categoria)) = 'varie';
+
 -- 1. Valori fuori elenco: categoria -> piattaforma.
 update public.prodotti
 set piattaforma_gioco = coalesce(nullif(trim(piattaforma_gioco), ''), nullif(trim(categoria), '')),
