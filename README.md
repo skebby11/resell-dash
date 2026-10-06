@@ -420,6 +420,21 @@ a cookie. To make links work from any browser, edit the **Magic Link** email tem
 
 `/auth/confirm` accepts both forms, so either template works without code changes.
 
+### One-time code (required for the iPhone Home Screen app)
+
+An app added to the iPhone Home Screen has its own cookies, separate from Safari, and links in
+emails open in Safari, so a magic link would sign you in to Safari, not to the app. The login page
+therefore also accepts the numeric code from the same email. Add `{{ .Token }}` to the **Magic
+Link** template next to the link — one email carries both, and either one signs you in:
+
+```html
+<p>Your sign-in code: <strong>{{ .Token }}</strong></p>
+<a href="{{ .ConfirmationURL }}">Or sign in with one click</a>
+```
+
+Supabase lets you edit email templates only with a custom SMTP provider (e.g. Resend). The code
+length follows **Authentication → Providers → Email → Email OTP Length** (6–10 digits).
+
 ## Project Structure
 
 ```

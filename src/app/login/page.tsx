@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Brand } from "@/components/dashboard/brand";
+import { percorsoInternoSicuro } from "@/lib/percorso-sicuro";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
@@ -13,7 +14,7 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
-  const destinazione = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  const destinazione = percorsoInternoSicuro(next);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
@@ -25,8 +26,8 @@ export default async function LoginPage({
         <div className="mt-8 rounded-xl border border-border bg-card p-6 shadow-sm">
           <h1 className="font-display text-lg italic text-foreground">Accedi</h1>
           <p className="mt-1 mb-5 text-xs leading-relaxed text-muted-foreground">
-            Accesso solo su invito: nessuna registrazione. Inserisci la tua email e ti arriva un
-            link per entrare, senza password.
+            Accesso solo su invito: nessuna registrazione. Inserisci la tua email e ti arrivano un
+            link e un codice per entrare, senza password.
           </p>
           <LoginForm next={destinazione} />
         </div>

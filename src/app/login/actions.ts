@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { percorsoInternoSicuro } from "@/lib/percorso-sicuro";
 
 export interface StatoLogin {
   errore?: string;
@@ -28,14 +29,6 @@ async function origineApp(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-/** Percorso interno sicuro verso cui rimandare dopo il login. */
-function normalizzaNext(next: string | null): string {
-  // Solo path assoluti interni: `//evil.com` o `https://evil.com` diventerebbero
-  // un open redirect se passati a Supabase come destinazione.
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
-  return next;
-}
-
 export async function inviaMagicLink(
   _stato: StatoLogin,
   formData: FormData
@@ -43,7 +36,7 @@ export async function inviaMagicLink(
   const email = String(formData.get("email") ?? "")
     .trim()
     .toLowerCase();
-  const next = normalizzaNext(String(formData.get("next") ?? "") || null);
+  const next = percorsoInternoSicuro(String(formData.get("next") ?? "") || null);
 
   if (!EMAIL_RE.test(email)) {
     return { errore: "Inserisci un indirizzo email valido." };
@@ -89,7 +82,7 @@ export async function verificaCodice(
     .trim()
     .toLowerCase();
   const codice = String(formData.get("codice") ?? "").replace(/\s+/g, "");
-  const next = normalizzaNext(String(formData.get("next") ?? "") || null);
+  const next = percorsoInternoSicuro(String(formData.get("next") ?? "") || null);
 
   if (!EMAIL_RE.test(email)) return { errore: "Richiedi di nuovo il codice." };
   if (!CODICE_RE.test(codice)) {
