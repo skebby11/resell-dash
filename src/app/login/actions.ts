@@ -7,7 +7,12 @@ import { createClient } from "@/lib/supabase/server";
 export interface StatoLogin {
   errore?: string;
   inviato?: boolean;
+  /** Email a cui è stato inviato il codice, per il secondo passaggio. */
+  email?: string;
 }
+
+// Lunghezza configurabile su Supabase (mailer_otp_length, 6–10 cifre).
+const CODICE_RE = /^\d{6,10}$/;
 
 // Validazione volutamente minima: il formato definitivo lo decide GoTrue.
 // Serve solo a evitare una chiamata di rete per input palesemente non-email.
@@ -66,7 +71,40 @@ export async function inviaMagicLink(
     return { errore: "Troppi tentativi ravvicinati. Riprova tra qualche minuto." };
   }
 
-  return { inviato: true };
+  return { inviato: true, email };
+}
+
+/**
+ * Accesso con il codice numerico della stessa email, alternativa al link.
+ *
+ * Serve soprattutto all'app aggiunta alla Home su iPhone: ha cookie separati
+ * da Safari, e il link dell'email si apre in Safari, quindi la sessione
+ * finirebbe lì e non nell'app. Il codice si digita dentro l'app stessa.
+ */
+export async function verificaCodice(
+  _stato: StatoLogin,
+  formData: FormData
+): Promise<StatoLogin> {
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const codice = String(formData.get("codice") ?? "").replace(/\s+/g, "");
+  const next = normalizzaNext(String(formData.get("next") ?? "") || null);
+
+  if (!EMAIL_RE.test(email)) return { errore: "Richiedi di nuovo il codice." };
+  if (!CODICE_RE.test(codice)) {
+    return { inviato: true, email, errore: "Il codice è composto solo da cifre." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.verifyOtp({ email, token: codice, type: "email" });
+
+  if (error?.status === 429) {
+    return { inviato: true, email, errore: "Troppi tentativi ravvicinati. Riprova tra qualche minuto." };
+  }
+  if (error) return { inviato: true, email, errore: "Codice non valido o scaduto." };
+
+  redirect(next);
 }
 
 export async function logout() {

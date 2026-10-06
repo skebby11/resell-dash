@@ -9,6 +9,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Non gira su asset statici e immagini: risparmia una chiamata di verifica
-  // del token su richieste che non toccano Supabase.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  // del token su richieste che non toccano Supabase. Il manifest va escluso
+  // anche per un altro motivo: senza sessione verrebbe rediretto a /login e
+  // il browser riceverebbe HTML al posto del JSON.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };
