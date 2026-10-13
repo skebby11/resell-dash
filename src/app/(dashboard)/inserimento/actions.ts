@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { parseInserimento, type CampoInserimento } from "@/lib/validazione";
 import { normalizzaBarcode } from "@/lib/integrations/barcode";
 import { aggiungiSuggerimento } from "@/lib/data/suggerimenti";
+import { piattaformaCanonica } from "@/lib/piattaforme";
 
 export interface StatoInserimento {
   ok?: boolean;
@@ -66,7 +67,9 @@ export async function creaArticolo(
     };
   }
   const fotoUrl = String(formData.get("foto_url") ?? "").trim() || null;
-  const piattaformaGioco = String(formData.get("piattaforma_gioco") ?? "").trim() || null;
+  const piattaformaDigitata = String(formData.get("piattaforma_gioco") ?? "").trim();
+  // Convenzione dell'app ("PlayStation 4" → "PS4"), anche per un nome digitato.
+  const piattaformaGioco = piattaformaDigitata ? piattaformaCanonica(piattaformaDigitata) : null;
 
   const supabase = await createClient();
 

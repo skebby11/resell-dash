@@ -1,4 +1,5 @@
 import "server-only";
+import { piattaformaCanonica } from "@/lib/piattaforme";
 
 /**
  * Ricerca titoli su IGDB, per il passo 2 del flusso barcode (vedi
@@ -155,7 +156,16 @@ export function ordinaCandidati(giochi: GiocoIgdbGrezzo[]): CandidatoIgdb[] {
   return ordinati.slice(0, MASSIMO_CANDIDATI_MOSTRATI).map((g) => ({
     id: g.id,
     nome: g.name,
-    piattaforme: (g.platforms ?? []).map((p) => p.name).filter((n): n is string => Boolean(n)),
+    // Nomi IGDB convertiti alla convenzione dell'app ("PlayStation 4" → "PS4"),
+    // deduplicati: "PlayStation" e "PlayStation 1" non devono comparire due volte.
+    piattaforme: [
+      ...new Set(
+        (g.platforms ?? [])
+          .map((p) => p.name)
+          .filter((n): n is string => Boolean(n))
+          .map(piattaformaCanonica)
+      ),
+    ],
     anno: annoDaTimestamp(g.first_release_date),
     copertina: g.cover?.image_id ? urlCopertina(g.cover.image_id) : undefined,
   }));

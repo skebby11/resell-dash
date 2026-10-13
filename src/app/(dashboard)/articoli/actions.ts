@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getContestoPaese, getPaeseVenditaArticolo } from "@/lib/data/queries";
 import { aggiungiSuggerimento } from "@/lib/data/suggerimenti";
+import { piattaformaCanonica } from "@/lib/piattaforme";
 import {
   parseInserimento,
   parseNomeEtichetta,
@@ -116,7 +117,9 @@ export async function modificaArticolo(
   const esito = parseInserimento(formData);
   if (!esito.ok) return { seq, campi: esito.campi, errore: esito.errore };
   const { nomeProdotto, categoria, dataAcquisto, costoAcquisto, fonteAcquisto, note } = esito.valori;
-  const piattaformaGioco = String(formData.get("piattaforma_gioco") ?? "").trim() || null;
+  const piattaformaDigitata = String(formData.get("piattaforma_gioco") ?? "").trim();
+  // Convenzione dell'app ("PlayStation 4" → "PS4"), anche per un nome digitato.
+  const piattaformaGioco = piattaformaDigitata ? piattaformaCanonica(piattaformaDigitata) : null;
 
   const nomeCategoria = categoria ? parseNomeEtichetta(categoria) : undefined;
   if (categoria && !nomeCategoria) return { seq, errore: "Categoria non valida (max 60 caratteri)." };

@@ -73,6 +73,13 @@ describe("ordinaCandidati", () => {
     expect(risultato.every((c) => c.nome)).toBe(true);
   });
 
+  it("converte le piattaforme IGDB alla forma breve", () => {
+    const risultato = ordinaCandidati([
+      { id: 1, name: "Gioco", platforms: [{ name: "PlayStation 4" }, { name: "PlayStation 5" }, { name: "PS4" }] },
+    ]);
+    expect(risultato[0].piattaforme).toEqual(["PS4", "PS5"]);
+  });
+
   it("mappa piattaforme e copertina, tollerando campi assenti", () => {
     const risultato = ordinaCandidati([
       { id: 1, name: "Gioco", cover: { image_id: "co1rba" }, platforms: [{ name: "PS5" }, { name: undefined }] },
