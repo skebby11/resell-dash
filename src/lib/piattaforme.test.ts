@@ -9,6 +9,14 @@ describe("piattaformaCanonica", () => {
     expect(piattaformaCanonica("PlayStation Vita")).toBe("PS Vita");
   });
 
+  it("usa le sigle Nintendo", () => {
+    expect(piattaformaCanonica("Nintendo 3DS")).toBe("3DS");
+    expect(piattaformaCanonica("New Nintendo 3DS")).toBe("3DS");
+    expect(piattaformaCanonica("Nintendo DS")).toBe("DS");
+    expect(piattaformaCanonica("Game Boy Advance")).toBe("GBA");
+    expect(piattaformaCanonica("Game Boy")).toBe("GB");
+  });
+
   it("ignora maiuscole e spazi superflui", () => {
     expect(piattaformaCanonica("  playstation   3 ")).toBe("PS3");
   });
