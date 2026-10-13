@@ -63,7 +63,7 @@ function RigaPiattaforma({ piattaforma }: { piattaforma: Piattaforma }) {
     async (precedente, formData) => {
       const esito = await rinominaPiattaforma(precedente, formData);
       if (esito.ok) {
-        toast.success("Piattaforma rinominata");
+        toast.success(esito.unita ? "Piattaforme unite" : "Piattaforma rinominata");
         setInModifica(false);
       } else if (esito.errore) {
         toast.error(esito.errore);

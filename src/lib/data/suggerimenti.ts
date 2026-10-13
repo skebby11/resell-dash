@@ -8,7 +8,9 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
  * suggerimenti gestito da Impostazioni, così compare anche lì.
  *
  * Non blocca mai il salvataggio: restituisce un avviso da mostrare, non un
- * errore. 23505 = già presente (unicità case-insensitive): si ignora.
+ * errore. Se il valore c'è già con un'altra grafia (unicità case-insensitive,
+ * 23505) restituisce la grafia registrata, così il prodotto non introduce una
+ * nuova variante ("playstation 4" → "PlayStation 4").
  */
 export async function aggiungiSuggerimento(
   supabase: Supabase,
@@ -40,5 +42,15 @@ export async function aggiungiSuggerimento(
   if (error && error.code !== "23505") {
     return { nome, aggiunto: false, avviso: `${etichetta} non aggiunta all'elenco: ${error.message}` };
   }
-  return { nome, aggiunto: !error };
+  if (error) {
+    // `ilike` senza wildcard = uguaglianza case-insensitive; % e _ vanno escapati.
+    const { data: esistente } = await supabase
+      .from(tabella)
+      .select("nome")
+      .ilike("nome", nome.replace(/[\\%_]/g, (c) => `\\${c}`))
+      .limit(1)
+      .maybeSingle();
+    return { nome: esistente?.nome ?? nome, aggiunto: false };
+  }
+  return { nome, aggiunto: true };
 }

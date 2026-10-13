@@ -540,6 +540,8 @@ export async function eliminaCategoria(id: string): Promise<void> {
 
 export interface StatoPiattaforma {
   ok?: boolean;
+  /** La rinomina ha unito questa piattaforma a un'altra già esistente. */
+  unita?: boolean;
   errore?: string;
   /** Il form si svuota rimontando con questa key come `seq`, come gli altri form dell'app. */
   seq: number;
@@ -574,6 +576,9 @@ export async function creaPiattaforma(
 }
 
 /**
+ * Rinominare con il nome di un'altra piattaforma esistente le unisce (vedi
+ * rinomina_piattaforma_con_propagazione in 0023).
+ *
  * Rinomina una piattaforma e propaga sempre il nuovo nome sui prodotti che
  * avevano il vecchio (confronto case-insensitive). A differenza dei canali
  * non c'è un checkbox "aggiorna storico": la piattaforma *è* il campo prodotto,
@@ -597,7 +602,8 @@ export async function rinominaPiattaforma(
   if (!nome) return { seq, errore: "Indica un nome (max 60 caratteri)." };
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("rinomina_piattaforma_con_propagazione", {
+  // Un nome già usato da un'altra piattaforma non è un errore: le unisce (0023).
+  const { data: unita, error } = await supabase.rpc("rinomina_piattaforma_con_propagazione", {
     piattaforma_id: id,
     nuovo_nome: nome,
   });
@@ -606,7 +612,7 @@ export async function rinominaPiattaforma(
   if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
 
   rivalidaPagine();
-  return { ok: true, seq: seq + 1 };
+  return { ok: true, unita: unita === true, seq: seq + 1 };
 }
 
 /** Attiva/disattiva una piattaforma. Disattivare non tocca `prodotti`. */

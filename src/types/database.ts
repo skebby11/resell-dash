@@ -411,7 +411,7 @@ export type Database = {
       scambia_ordine_piattaforme: { Args: { id_a: string; id_b: string }; Returns: undefined };
       rinomina_piattaforma_con_propagazione: {
         Args: { piattaforma_id: string; nuovo_nome: string };
-        Returns: undefined;
+        Returns: boolean;
       };
       rinomina_categoria_con_propagazione: {
         Args: { categoria_id: string; nuovo_nome: string };

@@ -211,7 +211,8 @@ export default async function ImpostazioniPage() {
           Piattaforme di gioco (PS5, Switch…) suggerite nel form di inserimento e in modifica
           articolo. Restano un campo di testo libero: una piattaforma digitata nel form viene
           aggiunta qui da sola. Disattivarla non tocca i prodotti che la usano già; rinominare
-          aggiorna i modelli esistenti.
+          aggiorna i modelli esistenti, e rinominarla col nome di un&apos;altra piattaforma le unisce
+          (utile per varianti come «ps4» e «PlayStation 4»).
         </p>
 
         <div className="mt-5">

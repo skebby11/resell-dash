@@ -45,12 +45,31 @@ create policy piattaforme_delete_autorizzati on piattaforme
   using ((select utente_autorizzato()));
 
 -- ---------------------------------------------------------------------------
--- Seed: i valori noti dell'app, nello stesso ordine di prima, poi quelli già
--- presenti sui prodotti (comprese le ex categorie spostate da 0021), dal più
--- usato al meno usato. Un solo nome per grafia (case/spazi ignorati).
--- Rieseguibile: on conflict do nothing.
+-- Seed: i valori già presenti sui prodotti, dal più usato al meno usato. Per
+-- ogni gruppo di grafie equivalenti (maiuscole/spazi ignorati) vince la grafia
+-- più usata. Varianti diverse dello stesso nome ("PS4" / "PlayStation 4")
+-- restano voci separate: si uniscono da Impostazioni rinominando l'una
+-- nell'altra. Su un'installazione nuova, senza prodotti, si parte dai valori
+-- noti dell'app. Rieseguibile: on conflict do nothing.
 -- ---------------------------------------------------------------------------
-insert into piattaforme (nome, ordine) values
+insert into piattaforme (nome, ordine)
+select nome,
+       (select coalesce(max(ordine), -1) from piattaforme) + row_number() over (order by n desc, nome)
+from (
+  select distinct on (lower(trim(piattaforma_gioco)))
+         trim(piattaforma_gioco) as nome,
+         sum(count(*)) over (partition by lower(trim(piattaforma_gioco))) as n
+  from prodotti
+  where nullif(trim(piattaforma_gioco), '') is not null
+    and length(trim(piattaforma_gioco)) <= 60
+  group by trim(piattaforma_gioco)
+  order by lower(trim(piattaforma_gioco)), count(*) desc, trim(piattaforma_gioco)
+) t
+on conflict (lower(nome)) do nothing;
+
+insert into piattaforme (nome, ordine)
+select v.nome, v.ordine
+from (values
   ('PS5', 0),
   ('PS4', 1),
   ('Xbox Series X|S', 2),
@@ -59,18 +78,8 @@ insert into piattaforme (nome, ordine) values
   ('Nintendo Switch OLED', 5),
   ('Nintendo Switch Lite', 6),
   ('PC', 7)
-on conflict (lower(nome)) do nothing;
-
-insert into piattaforme (nome, ordine)
-select nome,
-       (select coalesce(max(ordine), -1) from piattaforme) + row_number() over (order by n desc, nome)
-from (
-  select min(trim(piattaforma_gioco)) as nome, count(*) as n
-  from prodotti
-  where nullif(trim(piattaforma_gioco), '') is not null
-    and length(trim(piattaforma_gioco)) <= 60
-  group by lower(trim(piattaforma_gioco))
-) t
+) as v(nome, ordine)
+where not exists (select 1 from piattaforme)
 on conflict (lower(nome)) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -92,14 +101,20 @@ revoke all on v_conteggio_piattaforme from anon;
 -- Rinomina con propagazione e scambio d'ordine atomici (stesso schema di
 -- rinomina_categoria_con_propagazione e scambia_ordine_categorie).
 -- ---------------------------------------------------------------------------
+-- Rinominare una piattaforma col nome di un'altra già esistente le *unisce*:
+-- i prodotti passano alla voce di destinazione (con la sua grafia) e la voce
+-- rinominata sparisce. È il modo per riordinare varianti come "ps4" e
+-- "PlayStation 4". Restituisce true se c'è stata un'unione.
 create or replace function rinomina_piattaforma_con_propagazione(piattaforma_id uuid, nuovo_nome text)
-returns void
+returns boolean
 language plpgsql
 security invoker
 set search_path = ''
 as $$
 declare
   v_vecchio_nome text;
+  v_dest_id uuid;
+  v_dest_nome text;
 begin
   select nome into v_vecchio_nome
   from public.piattaforme
@@ -110,19 +125,35 @@ begin
     raise exception 'Piattaforma non trovata.';
   end if;
 
+  select id, nome into v_dest_id, v_dest_nome
+  from public.piattaforme
+  where lower(nome) = lower(trim(nuovo_nome)) and id <> piattaforma_id
+  for update;
+
+  if found then
+    update public.prodotti
+    set piattaforma_gioco = v_dest_nome
+    where piattaforma_gioco is not null
+      and lower(trim(piattaforma_gioco)) = lower(v_vecchio_nome);
+    delete from public.piattaforme where id = piattaforma_id;
+    return true;
+  end if;
+
   update public.piattaforme set nome = nuovo_nome where id = piattaforma_id;
 
   -- Confronto esatto: una rinomina che cambia solo il case deve propagare.
   if v_vecchio_nome <> nuovo_nome then
     update public.prodotti
     set piattaforma_gioco = nuovo_nome
-    where piattaforma_gioco is not null and lower(piattaforma_gioco) = lower(v_vecchio_nome);
+    where piattaforma_gioco is not null
+      and lower(trim(piattaforma_gioco)) = lower(v_vecchio_nome);
   end if;
+  return false;
 end;
 $$;
 
 comment on function rinomina_piattaforma_con_propagazione(uuid, text) is
-  'Rinomina una piattaforma e propaga il nome ai prodotti nella stessa transazione, bloccando la riga piattaforma contro rinomine concorrenti.';
+  'Rinomina una piattaforma propagando il nome ai prodotti; se il nuovo nome è già di un''altra piattaforma, unisce le due. Restituisce true in caso di unione.';
 
 revoke all on function rinomina_piattaforma_con_propagazione(uuid, text) from public, anon;
 grant execute on function rinomina_piattaforma_con_propagazione(uuid, text) to authenticated;

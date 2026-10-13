@@ -148,6 +148,9 @@ export async function modificaArticolo(
     await aggiungiSuggerimento(supabase, "piattaforme", nomePiattaforma ?? null),
   ];
   const avvisi = [esitoCategoria.avviso, esitoPiattaforma.avviso].filter(Boolean);
+  // Grafia registrata nell'elenco, se il valore c'era già con maiuscole diverse.
+  const categoriaFinale = esitoCategoria.nome ?? nomeCategoria ?? null;
+  const piattaformaFinale = esitoPiattaforma.nome ?? nomePiattaforma ?? null;
 
   let prodottoId = articolo.prodotto_id;
   if (attuale && normalizza(attuale.nome) === normalizza(nomeProdotto)) {
@@ -157,8 +160,8 @@ export async function modificaArticolo(
       .from("prodotti")
       .update({
         nome: nomeProdotto,
-        categoria: nomeCategoria ?? null,
-        piattaforma_gioco: nomePiattaforma ?? null,
+        categoria: categoriaFinale,
+        piattaforma_gioco: piattaformaFinale,
       })
       .eq("id", prodottoId);
     if (error) return { seq, errore: `Aggiornamento del prodotto non riuscito: ${error.message}` };
@@ -177,8 +180,8 @@ export async function modificaArticolo(
         .from("prodotti")
         .insert({
           nome: nomeProdotto,
-          categoria: nomeCategoria ?? null,
-          piattaforma_gioco: nomePiattaforma ?? null,
+          categoria: categoriaFinale,
+          piattaforma_gioco: piattaformaFinale,
         })
         .select("id")
         .single();
