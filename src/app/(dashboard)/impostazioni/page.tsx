@@ -5,11 +5,13 @@ import {
   getCategorieConConteggio,
   getPaeseOrigine,
   getPaesi,
+  getPiattaformeConConteggio,
   getUtenteCorrente,
 } from "@/lib/data/queries";
 import { CanaliManager } from "@/components/dashboard/canali-manager";
 import { CategorieManager } from "@/components/dashboard/categorie-manager";
 import { PaesiManager } from "@/components/dashboard/paesi-manager";
+import { PiattaformeManager } from "@/components/dashboard/piattaforme-manager";
 import { ETICHETTA_TIPO_CANALE, TIPI_CANALE } from "@/types";
 
 // La pagina è ora dietro il gate del layout: solo utenti in `utenti_autorizzati`
@@ -66,12 +68,13 @@ function isConfigured(envVars: string[]): boolean {
 }
 
 export default async function ImpostazioniPage() {
-  const [utente, { canali, orfani }, paesi, paeseOrigine, categorie] = await Promise.all([
+  const [utente, { canali, orfani }, paesi, paeseOrigine, categorie, piattaforme] = await Promise.all([
     getUtenteCorrente(),
     getCanaliConConteggio(),
     getPaesi(),
     getPaeseOrigine(),
     getCategorieConConteggio(),
+    getPiattaformeConConteggio(),
   ]);
 
   return (
@@ -199,6 +202,20 @@ export default async function ImpostazioniPage() {
 
         <div className="mt-5">
           <CategorieManager categorie={categorie} />
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <h2 className="font-display text-lg italic text-foreground">Piattaforme</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Piattaforme di gioco (PS5, Switch…) suggerite nel form di inserimento e in modifica
+          articolo. Restano un campo di testo libero: una piattaforma digitata nel form viene
+          aggiunta qui da sola. Disattivarla non tocca i prodotti che la usano già; rinominare
+          aggiorna i modelli esistenti.
+        </p>
+
+        <div className="mt-5">
+          <PiattaformeManager piattaforme={piattaforme} />
         </div>
       </section>
     </div>

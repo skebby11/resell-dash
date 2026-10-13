@@ -12,7 +12,7 @@ import { StatoBadge } from "@/components/dashboard/stato-badge";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Articolo, Paese } from "@/types";
 import { AzioniStato } from "./azioni-stato";
-import { CostoDialog } from "./costo-dialog";
+import { ModificaDialog } from "./modifica-dialog";
 import { VenditaDialog } from "./vendita-dialog";
 
 const VENDUTO_STATI = new Set(["venduto", "consegnato"]);
@@ -37,6 +37,9 @@ export function ArticoliTable({
   spedizionieri,
   paesi,
   paeseOrigine,
+  categorie,
+  piattaforme,
+  fontiAcquisto,
 }: {
   articoli: Articolo[];
   /** Canali attivi letti dal database (0013_canali_configurabili). */
@@ -44,6 +47,10 @@ export function ArticoliTable({
   spedizionieri: string[];
   paesi: Paese[];
   paeseOrigine: string;
+  /** Suggerimenti attivi per il dialog di modifica (0015, 0023, 0013). */
+  categorie: string[];
+  piattaforme: string[];
+  fontiAcquisto: string[];
 }) {
   const nomiPaesi = new Map(paesi.map((p) => [p.codice, p.nome]));
   return (
@@ -87,10 +94,7 @@ export function ArticoliTable({
                   {formatDate(a.dataAcquisto)}
                 </TableCell>
                 <TableCell className="text-right font-mono-num">
-                  <span className="inline-flex items-center gap-1">
-                    {formatCurrency(a.costoAcquisto)}
-                    <CostoDialog articolo={a} />
-                  </span>
+                  {formatCurrency(a.costoAcquisto)}
                 </TableCell>
                 <TableCell>
                   <StatoBadge stato={a.stato} />
@@ -122,6 +126,12 @@ export function ArticoliTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-0.5">
+                    <ModificaDialog
+                      articolo={a}
+                      categorie={categorie}
+                      piattaforme={piattaforme}
+                      fontiAcquisto={fontiAcquisto}
+                    />
                     <VenditaDialog
                       articolo={a}
                       piattaformeVendita={piattaformeVendita}

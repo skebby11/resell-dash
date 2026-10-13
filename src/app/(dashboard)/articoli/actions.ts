@@ -3,10 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getContestoPaese, getPaeseVenditaArticolo } from "@/lib/data/queries";
+import { aggiungiSuggerimento } from "@/lib/data/suggerimenti";
 import {
+  parseInserimento,
+  parseNomeEtichetta,
   parseVendita,
   puoArchiviareArticolo,
   UUID_RE,
+  type CampoInserimento,
   type CampoVendita,
 } from "@/lib/validazione";
 import { STATI_ARTICOLO, type StatoArticolo } from "@/types";
@@ -75,20 +79,137 @@ export async function registraVendita(
   return { ok: true, seq: seq + 1 };
 }
 
-/** Corregge il costo d'acquisto e ricalcola le medie del prodotto (0020). */
-export async function aggiornaCostoAcquisto(id: string, costo: number): Promise<void> {
-  if (!UUID_RE.test(id)) throw new Error("Articolo non valido.");
-  if (!Number.isFinite(costo) || costo < 0) throw new Error("Il costo deve essere un numero non negativo.");
+export interface StatoModifica {
+  ok?: boolean;
+  errore?: string;
+  campi?: Partial<Record<CampoInserimento, string>>;
+  /** Contatore dei salvataggi riusciti: il dialog lo osserva per chiudersi. */
+  seq: number;
+}
+
+/** Confronto tra nomi: ignora maiuscole e spazi ripetuti (come in inserimento). */
+function normalizza(nome: string): string {
+  return nome.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Modifica un articolo già registrato: prodotto, categoria, piattaforma, data,
+ * costo, fonte e note.
+ *
+ * Categoria e piattaforma sono attributi del *modello*, non della singola
+ * copia: se il prodotto resta lo stesso si aggiornano sul modello (e valgono
+ * per tutte le sue copie). Se si digita un altro nome l'articolo passa a quel
+ * modello, creato al volo se non esiste (come in inserimento); in quel caso un
+ * modello già in catalogo tiene la sua anagrafica. Le medie dei prodotti
+ * coinvolti si riallineano dal trigger su `articoli` (0022).
+ *
+ * `profitto` non viene mai scritto: è una colonna generated.
+ */
+export async function modificaArticolo(
+  stato: StatoModifica,
+  formData: FormData
+): Promise<StatoModifica> {
+  const seq = stato.seq ?? 0;
+  const id = String(formData.get("id") ?? "").trim();
+  if (!UUID_RE.test(id)) return { seq, errore: "Articolo non valido." };
+
+  const esito = parseInserimento(formData);
+  if (!esito.ok) return { seq, campi: esito.campi, errore: esito.errore };
+  const { nomeProdotto, categoria, dataAcquisto, costoAcquisto, fonteAcquisto, note } = esito.valori;
+  const piattaformaGioco = String(formData.get("piattaforma_gioco") ?? "").trim() || null;
+
+  const nomeCategoria = categoria ? parseNomeEtichetta(categoria) : undefined;
+  if (categoria && !nomeCategoria) return { seq, errore: "Categoria non valida (max 60 caratteri)." };
+  const nomePiattaforma = piattaformaGioco ? parseNomeEtichetta(piattaformaGioco) : undefined;
+  if (piattaformaGioco && !nomePiattaforma) {
+    return { seq, errore: "Piattaforma non valida (max 60 caratteri)." };
+  }
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("aggiorna_costo_acquisto", {
-    articolo_id: id,
-    nuovo_costo: Math.round(costo * 100) / 100,
-  });
-  if (error) throw new Error(error.message);
+
+  const { data: articolo, error: eArticolo } = await supabase
+    .from("articoli")
+    .select("prodotto_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (eArticolo) return { seq, errore: `Lettura non riuscita: ${eArticolo.message}` };
+  if (!articolo) return { seq, errore: "Articolo non trovato." };
+
+  const { data: attuale, error: eProdotto } = await supabase
+    .from("prodotti")
+    .select("nome")
+    .eq("id", articolo.prodotto_id)
+    .maybeSingle();
+  if (eProdotto) return { seq, errore: `Lettura non riuscita: ${eProdotto.message}` };
+
+  // Categoria e piattaforma nuove entrano tra i suggerimenti di Impostazioni.
+  const [esitoCategoria, esitoPiattaforma] = [
+    await aggiungiSuggerimento(supabase, "categorie", nomeCategoria ?? null),
+    await aggiungiSuggerimento(supabase, "piattaforme", nomePiattaforma ?? null),
+  ];
+  const avvisi = [esitoCategoria.avviso, esitoPiattaforma.avviso].filter(Boolean);
+
+  let prodottoId = articolo.prodotto_id;
+  if (attuale && normalizza(attuale.nome) === normalizza(nomeProdotto)) {
+    // Stesso modello: categoria e piattaforma (e una correzione di
+    // maiuscole/spazi nel nome) si applicano all'anagrafica.
+    const { error } = await supabase
+      .from("prodotti")
+      .update({
+        nome: nomeProdotto,
+        categoria: nomeCategoria ?? null,
+        piattaforma_gioco: nomePiattaforma ?? null,
+      })
+      .eq("id", prodottoId);
+    if (error) return { seq, errore: `Aggiornamento del prodotto non riuscito: ${error.message}` };
+  } else {
+    const { data: candidati, error: eRicerca } = await supabase
+      .from("prodotti")
+      .select("id, nome")
+      .ilike("nome", nomeProdotto)
+      .limit(10);
+    if (eRicerca) return { seq, errore: `Ricerca del prodotto non riuscita: ${eRicerca.message}` };
+    const trovato = candidati?.find((p) => normalizza(p.nome) === normalizza(nomeProdotto));
+    if (trovato) {
+      prodottoId = trovato.id;
+    } else {
+      const { data: nuovo, error } = await supabase
+        .from("prodotti")
+        .insert({
+          nome: nomeProdotto,
+          categoria: nomeCategoria ?? null,
+          piattaforma_gioco: nomePiattaforma ?? null,
+        })
+        .select("id")
+        .single();
+      if (error) return { seq, errore: `Creazione del prodotto non riuscita: ${error.message}` };
+      prodottoId = nuovo.id;
+    }
+  }
+
+  const { error, count } = await supabase
+    .from("articoli")
+    .update(
+      {
+        prodotto_id: prodottoId,
+        data_acquisto: dataAcquisto,
+        costo_acquisto: costoAcquisto,
+        fonte_acquisto: fonteAcquisto,
+        note,
+      },
+      { count: "exact" }
+    )
+    .eq("id", id);
+  if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
+  if (count === 0) return { seq, errore: "Articolo non trovato o non modificabile." };
 
   rivalidaPagine();
   revalidatePath("/catalogo");
+  if (esitoCategoria.aggiunto || esitoPiattaforma.aggiunto) {
+    revalidatePath("/impostazioni");
+    revalidatePath("/inserimento");
+  }
+  return { ok: true, seq: seq + 1, errore: avvisi.length ? avvisi.join(" ") : undefined };
 }
 
 /**

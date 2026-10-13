@@ -81,6 +81,16 @@ export interface Categoria {
   conteggioProdotti: number;
 }
 
+/** Una piattaforma di gioco configurabile, con quanti modelli usano ancora il suo nome. */
+export interface PiattaformaGioco {
+  id: string;
+  nome: string;
+  attivo: boolean;
+  ordine: number;
+  /** Prodotti la cui `piattaforma_gioco` corrisponde a `nome` (indipendentemente da questa riga essendo attiva o meno). */
+  conteggioProdotti: number;
+}
+
 /**
  * I 27 stati membri UE (codice ISO 3166-1 alpha-2 → nome italiano), verificati
  * e non a memoria: il Regno Unito non ne fa più parte da Brexit; Norvegia,
@@ -133,9 +143,12 @@ const MAPPA_PAESI_UE = new Map<string, string>(PAESI_UE.map((p) => [p.codice, p.
 export function nomePaese(codice: string): string {
   return MAPPA_PAESI_UE.get(codice) ?? codice;
 }
-// Piattaforme di gioco (console/handheld): suggerimenti per il datalist del
-// form di inserimento, non un vincolo — `prodotti.piattaforma_gioco` è testo
-// libero, tra l'altro perché il lookup IGDB può restituire varianti non elencate.
+// Piattaforme di gioco (console/handheld). Non sono più lette da qui dai form
+// (0023_piattaforme_configurabili): sono per-installazione, in tabella
+// `piattaforme`, gestibili da Impostazioni. Questa lista sopravvive solo come
+// seed della migration (deve restare identica) e come esempio per i dati mock.
+// `prodotti.piattaforma_gioco` resta testo libero, tra l'altro perché il
+// lookup IGDB può restituire varianti non elencate.
 export const PIATTAFORME_GIOCO = [
   "PS5",
   "PS4",
@@ -182,6 +195,8 @@ export interface Articolo {
   prodottoId: string; // NOT NULL, ON DELETE RESTRICT lato DB: un articolo riferisce sempre un prodotto valido
   prodottoNome: string;
   categoria: string | null;
+  /** Piattaforma di gioco del prodotto collegato (attributo del modello, non della singola copia). */
+  piattaformaGioco?: string | null;
 
   dataAcquisto: string; // ISO date
   costoAcquisto: number;

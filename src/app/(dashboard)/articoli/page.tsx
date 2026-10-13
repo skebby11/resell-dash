@@ -4,8 +4,10 @@ import {
   ARTICOLI_PER_PAGINA,
   getArticoliPaginati,
   getCanaliAttivi,
+  getCategorieAttive,
   getPaeseOrigine,
   getPaesi,
+  getPiattaformeAttive,
   normalizzaPagina,
   normalizzaStato,
 } from "@/lib/data/queries";
@@ -31,13 +33,25 @@ export default async function ArticoliPage({
   // `pagina` dal risultato e non dal parametro: una richiesta fuori intervallo
   // viene riportata all'ultima pagina valida, e l'indicatore deve dire dove
   // siamo davvero.
-  const [{ righe, totale, pagina }, piattaformeVendita, spedizionieri, paesi, paeseOrigine] =
+  const [
+    { righe, totale, pagina },
+    piattaformeVendita,
+    spedizionieri,
+    paesi,
+    paeseOrigine,
+    categorie,
+    piattaforme,
+    fontiAcquisto,
+  ] =
     await Promise.all([
       getArticoliPaginati({ stato, q, senzaPaese, archivio, pagina: normalizzaPagina(params.p) }),
       getCanaliAttivi("piattaforma_vendita"),
       getCanaliAttivi("spedizioniere"),
       getPaesi(),
       getPaeseOrigine(),
+      getCategorieAttive(),
+      getPiattaformeAttive(),
+      getCanaliAttivi("fonte_acquisto"),
     ]);
 
   // Lista di default vuota: i Filtri restano visibili, altrimenti Archivio
@@ -82,6 +96,9 @@ export default async function ArticoliPage({
         spedizionieri={spedizionieri}
         paesi={paesi}
         paeseOrigine={paeseOrigine}
+        categorie={categorie}
+        piattaforme={piattaforme}
+        fontiAcquisto={fontiAcquisto}
       />
       <Paginazione
         pagina={pagina}

@@ -8,6 +8,7 @@ import {
   type Articolo,
   type Canale,
   type Categoria,
+  type PiattaformaGioco,
   type DistribuzioneVoce,
   type Kpi,
   type Paese,
@@ -108,7 +109,7 @@ const SELECT_ARTICOLI = `
   data_vendita, prezzo_vendita, piattaforma_vendita, fee, costo_spedizione,
   destinazione, paese_vendita, spedizioniere, prodotto_sponsorizzato, vendita_post_offerta,
   profitto, note, archiviato_at, created_at,
-  prodotti!inner ( nome, categoria )
+  prodotti!inner ( nome, categoria, piattaforma_gioco )
 `;
 
 export const ARTICOLI_PER_PAGINA = 50;
@@ -649,6 +650,46 @@ export async function getCategorieAttive(): Promise<string[]> {
     .order("nome", { ascending: true });
   if (error) erroreLettura("categorie", error.message);
   return (data ?? []).map((r) => r.nome);
+}
+
+/** Nomi delle piattaforme attive, in ordine di preferenza, per il `datalist` dei form (0023). */
+export async function getPiattaformeAttive(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("piattaforme")
+    .select("nome")
+    .eq("attivo", true)
+    .order("ordine", { ascending: true })
+    .order("nome", { ascending: true });
+  if (error) erroreLettura("piattaforme", error.message);
+  return (data ?? []).map((r) => r.nome);
+}
+
+/** Tutte le piattaforme configurate (attive e disattivate), con quanti prodotti usano ancora quel nome. */
+export async function getPiattaformeConConteggio(): Promise<PiattaformaGioco[]> {
+  const supabase = await createClient();
+  const [piattaformeRes, conteggiRes] = await Promise.all([
+    supabase.from("piattaforme").select("*").order("ordine").order("nome"),
+    supabase.from("v_conteggio_piattaforme").select("*"),
+  ]);
+  if (piattaformeRes.error) erroreLettura("piattaforme", piattaformeRes.error.message);
+  if (conteggiRes.error) erroreLettura("conteggio piattaforme", conteggiRes.error.message);
+
+  // Chiave case-insensitive, come l'unicità di `ux_piattaforme_nome`.
+  const conteggi = new Map<string, number>();
+  for (const r of conteggiRes.data ?? []) {
+    if (r.nome == null) continue;
+    const k = r.nome.toLowerCase();
+    conteggi.set(k, (conteggi.get(k) ?? 0) + Number(r.conteggio ?? 0));
+  }
+
+  return (piattaformeRes.data ?? []).map((r) => ({
+    id: r.id,
+    nome: r.nome,
+    attivo: r.attivo,
+    ordine: r.ordine,
+    conteggioProdotti: conteggi.get(r.nome.toLowerCase()) ?? 0,
+  }));
 }
 
 /**

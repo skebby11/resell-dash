@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/format";
-import { PIATTAFORME_GIOCO } from "@/types";
 import { creaArticolo, type StatoInserimento } from "./actions";
 
 export interface ProdottoNoto {
@@ -216,6 +215,7 @@ function CampiInserimento({
   prodotti,
   fontiAcquisto,
   categorie,
+  piattaforme,
   campi,
 }: {
   prodotti: ProdottoNoto[];
@@ -223,6 +223,8 @@ function CampiInserimento({
   fontiAcquisto: string[];
   /** Categorie attive lette dal database (0015_categorie_configurabili), non più una costante. */
   categorie: string[];
+  /** Piattaforme attive lette dal database (0023_piattaforme_configurabili), non più una costante. */
+  piattaforme: string[];
   campi: StatoInserimento["campi"];
 }) {
   const [nome, setNome] = useState("");
@@ -581,7 +583,7 @@ function CampiInserimento({
                 quelle realmente uscite per questo titolo, non un elenco
                 generico. Deduplicate rispetto alla lista comune sottostante. */}
             <datalist id="lista-piattaforme">
-              {[...piattaformeCandidato, ...PIATTAFORME_GIOCO.filter((p) => !piattaformeCandidato.includes(p))].map(
+              {[...piattaformeCandidato, ...piattaforme.filter((p) => !piattaformeCandidato.includes(p))].map(
                 (p) => (
                   <option key={p} value={p} />
                 )
@@ -680,10 +682,12 @@ export function InserimentoForm({
   prodotti,
   fontiAcquisto,
   categorie,
+  piattaforme,
 }: {
   prodotti: ProdottoNoto[];
   fontiAcquisto: string[];
   categorie: string[];
+  piattaforme: string[];
 }) {
   const [stato, action] = useActionState<StatoInserimento, FormData>(creaArticolo, { seq: 0 });
 
@@ -715,6 +719,7 @@ export function InserimentoForm({
         prodotti={prodotti}
         fontiAcquisto={fontiAcquisto}
         categorie={categorie}
+        piattaforme={piattaforme}
         campi={stato.campi}
       />
       <BottoneSalva />
