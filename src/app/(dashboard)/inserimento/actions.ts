@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { parseInserimento, parseNomeEtichetta, type CampoInserimento } from "@/lib/validazione";
+import { parseInserimento, type CampoInserimento } from "@/lib/validazione";
 import { normalizzaBarcode } from "@/lib/integrations/barcode";
+import { aggiungiSuggerimento } from "@/lib/data/suggerimenti";
+import { piattaformaCanonica } from "@/lib/piattaforme";
 
 export interface StatoInserimento {
   ok?: boolean;
@@ -65,40 +67,26 @@ export async function creaArticolo(
     };
   }
   const fotoUrl = String(formData.get("foto_url") ?? "").trim() || null;
-  const piattaformaGioco = String(formData.get("piattaforma_gioco") ?? "").trim() || null;
+  const piattaformaDigitata = String(formData.get("piattaforma_gioco") ?? "").trim();
+  // Convenzione dell'app ("PlayStation 4" → "PS4"), anche per un nome digitato.
+  const piattaformaGioco = piattaformaDigitata ? piattaformaCanonica(piattaformaDigitata) : null;
 
   const supabase = await createClient();
 
-  // Categoria digitata (anche su un prodotto già esistente) → `categorie`,
-  // così compare in Impostazioni. Si fa subito, prima dell'articolo: se il
-  // prodotto è stato creato e l'articolo fallisce, il nome non deve sparire.
-  // 23505 = già presente (unicità case-insensitive): si ignora.
-  const nomeCategoria = categoria ? parseNomeEtichetta(categoria) : undefined;
-  let avviso: string | undefined;
-  if (categoria && !nomeCategoria) {
-    avviso =
-      "Categoria non valida (max 60 caratteri): non è stata aggiunta all'elenco.";
-  } else if (nomeCategoria) {
-    const { data: ultimo, error: eOrdine } = await supabase
-      .from("categorie")
-      .select("ordine")
-      .order("ordine", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (eOrdine) {
-      avviso = `Categoria non aggiunta all'elenco: ${eOrdine.message}`;
-    } else {
-      const { error: eCategoria } = await supabase.from("categorie").insert({
-        nome: nomeCategoria,
-        ordine: (ultimo?.ordine ?? -1) + 1,
-      });
-      if (eCategoria && eCategoria.code !== "23505") {
-        avviso = `Categoria non aggiunta all'elenco: ${eCategoria.message}`;
-      } else if (!eCategoria) {
-        revalidatePath("/impostazioni");
-        revalidatePath("/inserimento");
-      }
-    }
+  // Categoria e piattaforma digitate (anche su un prodotto già esistente) →
+  // `categorie` / `piattaforme`, così compaiono in Impostazioni. Si fa subito,
+  // prima dell'articolo: se il prodotto è stato creato e l'articolo fallisce, il
+  // nome non deve sparire.
+  const [esitoCategoria, esitoPiattaforma] = [
+    await aggiungiSuggerimento(supabase, "categorie", categoria),
+    await aggiungiSuggerimento(supabase, "piattaforme", piattaformaGioco),
+  ];
+  const nomeCategoria = esitoCategoria.nome;
+  const nomePiattaforma = esitoPiattaforma.nome;
+  let avviso = [esitoCategoria.avviso, esitoPiattaforma.avviso].filter(Boolean).join(" ") || undefined;
+  if (esitoCategoria.aggiunto || esitoPiattaforma.aggiunto) {
+    revalidatePath("/impostazioni");
+    revalidatePath("/inserimento");
   }
 
   // Il barcode è una chiave di deduplica più affidabile del nome: se il
@@ -174,7 +162,7 @@ export async function creaArticolo(
         categoria: nomeCategoria ?? categoria,
         barcode,
         foto_url: fotoUrl,
-        piattaforma_gioco: piattaformaGioco,
+        piattaforma_gioco: nomePiattaforma ?? piattaformaGioco,
       })
       .select("id")
       .single();

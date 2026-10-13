@@ -43,7 +43,7 @@ export function toProdotto(row: Tables<"prodotti">): Prodotto {
 
 /** Riga `articoli` con il prodotto collegato, come la restituisce la select con join. */
 export type RigaArticoloConProdotto = Tables<"articoli"> & {
-  prodotti: Pick<Tables<"prodotti">, "nome" | "categoria"> | null;
+  prodotti: Pick<Tables<"prodotti">, "nome" | "categoria" | "piattaforma_gioco"> | null;
 };
 
 export function toArticolo(row: RigaArticoloConProdotto): Articolo {
@@ -54,6 +54,7 @@ export function toArticolo(row: RigaArticoloConProdotto): Articolo {
     // fallback copre solo il caso in cui la RLS nascondesse la riga collegata.
     prodottoNome: row.prodotti?.nome ?? "Prodotto sconosciuto",
     categoria: row.prodotti?.categoria ?? null,
+    piattaformaGioco: row.prodotti?.piattaforma_gioco ?? null,
     dataAcquisto: row.data_acquisto,
     costoAcquisto: numeroObbligatorio(row.costo_acquisto),
     fonteAcquisto: row.fonte_acquisto,

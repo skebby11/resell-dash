@@ -1,14 +1,15 @@
 import { PackagePlus } from "lucide-react";
-import { getCanaliAttivi, getCategorieAttive, getNomiProdotti } from "@/lib/data/queries";
+import { getCanaliAttivi, getCategorieAttive, getNomiProdotti, getPiattaformeAttive } from "@/lib/data/queries";
 import { InserimentoForm } from "./inserimento-form";
 
 export default async function InserimentoPage() {
   // Solo nome e prezzo medio: servono a popolare l'autocompletamento, non
   // l'intera anagrafica.
-  const [prodotti, fontiAcquisto, categorie] = await Promise.all([
+  const [prodotti, fontiAcquisto, categorie, piattaforme] = await Promise.all([
     getNomiProdotti(),
     getCanaliAttivi("fonte_acquisto"),
     getCategorieAttive(),
+    getPiattaformeAttive(),
   ]);
 
   return (
@@ -27,7 +28,12 @@ export default async function InserimentoPage() {
           </div>
         </div>
 
-        <InserimentoForm prodotti={prodotti} fontiAcquisto={fontiAcquisto} categorie={categorie} />
+        <InserimentoForm
+          prodotti={prodotti}
+          fontiAcquisto={fontiAcquisto}
+          categorie={categorie}
+          piattaforme={piattaforme}
+        />
       </div>
     </div>
   );

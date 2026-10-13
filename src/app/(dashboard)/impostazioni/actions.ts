@@ -32,7 +32,7 @@ function rivalidaPagine() {
   revalidatePath("/articoli");
   revalidatePath("/vendite-ue");
   revalidatePath("/catalogo");
-  // Rinomina categoria aggiorna `prodotti.categoria`: il donut della
+  // Rinomina categoria/piattaforma aggiorna `prodotti.categoria` / `prodotti.piattaforma_gioco`: il donut della
   // dashboard deve seguire il nuovo nome, non restare sulla fetta vecchia.
   revalidatePath("/");
 }
@@ -532,6 +532,160 @@ export async function eliminaCategoria(id: string): Promise<void> {
   }
 
   const { error } = await supabase.from("categorie").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  rivalidaPagine();
+}
+
+// ------------------------------------------------------------ piattaforme ----
+
+export interface StatoPiattaforma {
+  ok?: boolean;
+  /** La rinomina ha unito questa piattaforma a un'altra già esistente. */
+  unita?: boolean;
+  errore?: string;
+  /** Il form si svuota rimontando con questa key come `seq`, come gli altri form dell'app. */
+  seq: number;
+}
+
+/** Aggiunge una piattaforma attiva, in coda all'ordine esistente. */
+export async function creaPiattaforma(
+  stato: StatoPiattaforma,
+  formData: FormData
+): Promise<StatoPiattaforma> {
+  const seq = stato.seq ?? 0;
+  const nome = parseNomeEtichetta(String(formData.get("nome") ?? ""));
+  if (!nome) return { seq, errore: "Indica un nome (max 60 caratteri)." };
+
+  const supabase = await createClient();
+  const { data: ultimo, error: eOrdine } = await supabase
+    .from("piattaforme")
+    .select("ordine")
+    .order("ordine", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (eOrdine) return { seq, errore: eOrdine.message };
+
+  const { error } = await supabase
+    .from("piattaforme")
+    .insert({ nome, ordine: (ultimo?.ordine ?? -1) + 1 });
+  if (error?.code === "23505") return { seq, errore: `"${nome}" esiste già: nessun duplicato creato.` };
+  if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
+
+  rivalidaPagine();
+  return { ok: true, seq: seq + 1 };
+}
+
+/**
+ * Rinominare con il nome di un'altra piattaforma esistente le unisce (vedi
+ * rinomina_piattaforma_con_propagazione in 0023).
+ *
+ * Rinomina una piattaforma e propaga sempre il nuovo nome sui prodotti che
+ * avevano il vecchio (confronto case-insensitive). A differenza dei canali
+ * non c'è un checkbox "aggiorna storico": la piattaforma *è* il campo prodotto,
+ * e lasciare orfani bloccherebbe per sempre l'eliminazione.
+ */
+/**
+ * Rinomina la piattaforma e propaga il nome ai prodotti in un'unica funzione
+ * SQL (0019_scritture_transazionali_articoli): la funzione blocca la riga
+ * piattaforma per la durata della transazione, così una rinomina concorrente
+ * della stessa piattaforma aspetta e riparte dal nome già aggiornato, invece
+ * di propagare in base a un nome ormai superato e lasciare prodotti orfani.
+ */
+export async function rinominaPiattaforma(
+  stato: StatoPiattaforma,
+  formData: FormData
+): Promise<StatoPiattaforma> {
+  const seq = stato.seq ?? 0;
+  const id = String(formData.get("id") ?? "");
+  if (!UUID_RE.test(id)) return { seq, errore: "Piattaforma non valida." };
+  const nome = parseNomeEtichetta(String(formData.get("nome") ?? ""));
+  if (!nome) return { seq, errore: "Indica un nome (max 60 caratteri)." };
+
+  const supabase = await createClient();
+  // Un nome già usato da un'altra piattaforma non è un errore: le unisce (0023).
+  const { data: unita, error } = await supabase.rpc("rinomina_piattaforma_con_propagazione", {
+    piattaforma_id: id,
+    nuovo_nome: nome,
+  });
+  if (error?.code === "23505") return { seq, errore: `"${nome}" esiste già: nessun duplicato creato.` };
+  if (error?.message === "Piattaforma non trovata.") return { seq, errore: "Piattaforma non trovata." };
+  if (error) return { seq, errore: `Salvataggio non riuscito: ${error.message}` };
+
+  rivalidaPagine();
+  return { ok: true, unita: unita === true, seq: seq + 1 };
+}
+
+/** Attiva/disattiva una piattaforma. Disattivare non tocca `prodotti`. */
+export async function impostaAttivoPiattaforma(id: string, attivo: boolean): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Piattaforma non valida.");
+  const supabase = await createClient();
+  const { error } = await supabase.from("piattaforme").update({ attivo }).eq("id", id);
+  if (error) throw new Error(error.message);
+  rivalidaPagine();
+}
+
+/**
+ * Scambia l'ordine con il vicino immediato nella direzione data.
+ * Uno scambio a due, non un riordino dell'intera lista.
+ */
+export async function spostaPiattaforma(id: string, direzione: "su" | "giu"): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Piattaforma non valida.");
+  const supabase = await createClient();
+
+  const { data: riga, error } = await supabase
+    .from("piattaforme")
+    .select("id, ordine")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!riga) throw new Error("Piattaforma non trovata.");
+
+  const vicinoQuery = supabase.from("piattaforme").select("id, ordine");
+  const { data: vicino, error: eVicino } =
+    direzione === "su"
+      ? await vicinoQuery.lt("ordine", riga.ordine).order("ordine", { ascending: false }).limit(1).maybeSingle()
+      : await vicinoQuery.gt("ordine", riga.ordine).order("ordine", { ascending: true }).limit(1).maybeSingle();
+  if (eVicino) throw new Error(eVicino.message);
+  if (!vicino) return;
+
+  // Stesso motivo dello scambio in spostaPaese: un'unica funzione SQL invece
+  // di due UPDATE separate, per evitare un ordine duplicato se la seconda
+  // fallisse a metà.
+  const { error: eScambio } = await supabase.rpc("scambia_ordine_piattaforme", {
+    id_a: riga.id,
+    id_b: vicino.id,
+  });
+  if (eScambio) throw new Error(eScambio.message);
+
+  rivalidaPagine();
+}
+
+export async function eliminaPiattaforma(id: string): Promise<void> {
+  if (!UUID_RE.test(id)) throw new Error("Piattaforma non valida.");
+  const supabase = await createClient();
+
+  const { data: riga, error: eLettura } = await supabase
+    .from("piattaforme")
+    .select("id, nome")
+    .eq("id", id)
+    .maybeSingle();
+  if (eLettura) throw new Error(eLettura.message);
+  if (!riga) throw new Error("Piattaforma non trovata.");
+
+  const { data: conteggi, error: eCount } = await supabase
+    .from("v_conteggio_piattaforme")
+    .select("nome, conteggio");
+  if (eCount) throw new Error(eCount.message);
+  const n = (conteggi ?? [])
+    .filter((r) => r.nome != null && r.nome.toLowerCase() === riga.nome.toLowerCase())
+    .reduce((s, r) => s + Number(r.conteggio ?? 0), 0);
+  if (n > 0) {
+    throw new Error(
+      `Riassegna o svuota la piattaforma sui ${n} modell${n === 1 ? "o" : "i"} prima di eliminarla.`
+    );
+  }
+
+  const { error } = await supabase.from("piattaforme").delete().eq("id", id);
   if (error) throw new Error(error.message);
   rivalidaPagine();
 }

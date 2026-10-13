@@ -157,6 +157,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      // Piattaforme di gioco configurabili (0023_piattaforme_configurabili):
+      // `prodotti.piattaforma_gioco` resta testo libero, questa tabella è il
+      // catalogo dei suggerimenti gestibili da Impostazioni.
+      piattaforme: {
+        Row: {
+          attivo: boolean;
+          created_at: string;
+          id: string;
+          nome: string;
+          ordine: number;
+        };
+        Insert: {
+          attivo?: boolean;
+          created_at?: string;
+          id?: string;
+          nome: string;
+          ordine?: number;
+        };
+        Update: {
+          attivo?: boolean;
+          created_at?: string;
+          id?: string;
+          nome?: string;
+          ordine?: number;
+        };
+        Relationships: [];
+      };
       impostazioni: {
         Row: { chiave: string; created_at: string; id: string; valore: Json | null };
         Insert: { chiave: string; created_at?: string; id?: string; valore?: Json | null };
@@ -281,6 +308,11 @@ export type Database = {
         Row: { conteggio: number | null; nome: string | null };
         Relationships: [];
       };
+      // Conteggio prodotti per stringa piattaforma (0023).
+      v_conteggio_piattaforme: {
+        Row: { conteggio: number | null; nome: string | null };
+        Relationships: [];
+      };
       v_distribuzione_categoria: {
         Row: { label: string | null; value: number | null };
         Relationships: [];
@@ -376,6 +408,11 @@ export type Database = {
         Returns: undefined;
       };
       elimina_articolo_con_ricalcolo: { Args: { articolo_id: string }; Returns: undefined };
+      scambia_ordine_piattaforme: { Args: { id_a: string; id_b: string }; Returns: undefined };
+      rinomina_piattaforma_con_propagazione: {
+        Args: { piattaforma_id: string; nuovo_nome: string };
+        Returns: boolean;
+      };
       rinomina_categoria_con_propagazione: {
         Args: { categoria_id: string; nuovo_nome: string };
         Returns: undefined;
