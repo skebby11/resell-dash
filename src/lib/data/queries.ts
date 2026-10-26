@@ -183,8 +183,11 @@ export async function getArticoliPaginati({
         .order(perDataVendita ? "data_vendita" : "data_acquisto", {
           ascending: perDataVendita,
         })
-        // `id` come tie-break: senza un ordine totale, righe con la stessa data
-        // possono cambiare pagina tra una richiesta e l'altra e sparire dall'elenco.
+        // A parità di data, ordine di inserimento (`created_at`).
+        .order("created_at", { ascending: true })
+        // `id` come ultimo tie-break: senza un ordine totale (es. righe importate
+        // in blocco con lo stesso `created_at`), righe con la stessa data possono
+        // cambiare pagina tra una richiesta e l'altra e sparire dall'elenco.
         .order("id", { ascending: true })
         .range(da, a) as unknown as PromiseLike<RisultatoRange<RigaArticoloConProdotto>>,
     () => base(SELECT_ARTICOLI, { count: "exact", head: true }),
